@@ -1,0 +1,337 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ModelProvider {
+  deepseek
+  glm
+  kimi
+}
+
+enum MessageSender {
+  user
+  character
+  system
+}
+
+enum MessageType {
+  text
+  voice
+  sticker
+  quote
+  red_packet
+  transfer
+  location
+  video
+  system_hint
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique @db.VarChar(20)
+  passwordHash String
+  nickname     String?   @db.VarChar(40)
+  avatar       String?
+  ageConfirmed Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  modelConfigs   ModelConfig[]
+  characters     Character[]
+  conversations  Conversation[]
+  messages       Message[]
+  memories       Memory[]
+  agentRuns      AgentRun[]
+  agentEvents    AgentEvent[]
+  agentToolCalls AgentToolCall[]
+  agentStates    AgentState[]
+  agentMemories  AgentMemory[]
+  aiRequests     AiRequest[]
+  events         AnalyticsEvent[]
+}
+
+model ModelConfig {
+  id              String        @id @default(uuid())
+  userId          String
+  provider        ModelProvider
+  modelName       String        @db.VarChar(80)
+  encryptedApiKey String
+  apiKeyIv        String
+  apiKeyAuthTag   String
+  apiKeyMasked    String        @db.VarChar(40)
+  isDefault       Boolean       @default(false)
+  lastTestStatus  String        @default("untested") @db.VarChar(20)
+  lastTestError   String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Character {
+  id                 String    @id @default(uuid())
+  userId             String
+  name               String    @db.VarChar(80)
+  nickname           String    @db.VarChar(80)
+  avatarPreset       String    @db.VarChar(80)
+  age                Int
+  birthday           String?   @db.VarChar(40)
+  occupation         String?   @db.VarChar(80)
+  city               String?   @db.VarChar(80)
+  rawCharacterCard   String?
+  structuredProfile  Json
+  relationshipStage  String    @db.VarChar(40)
+  adultEnabled       Boolean   @default(false)
+  adultIntensity     String    @default("light") @db.VarChar(20)
+  proactiveFrequency String    @default("medium") @db.VarChar(20)
+  lastProactiveAt    DateTime?
+  riskLevel          String    @default("none") @db.VarChar(20)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  user           User            @relation(fields: [userId], references: [id])
+  conversation   Conversation?
+  messages       Message[]
+  memories       Memory[]
+  agentRuns      AgentRun[]
+  agentEvents    AgentEvent[]
+  agentToolCalls AgentToolCall[]
+  agentStates    AgentState[]
+  agentMemories  AgentMemory[]
+  aiRequests     AiRequest[]
+
+  @@index([userId, deletedAt])
+}
+
+model Conversation {
+  id                 String    @id @default(uuid())
+  userId             String
+  characterId        String    @unique
+  pinned             Boolean   @default(false)
+  unreadCount        Int       @default(0)
+  lastMessagePreview String?   @db.VarChar(200)
+  lastMessageAt      DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  user       User        @relation(fields: [userId], references: [id])
+  character  Character   @relation(fields: [characterId], references: [id])
+  messages   Message[]
+  aiRequests AiRequest[]
+
+  @@index([userId, pinned, lastMessageAt])
+}
+
+model Message {
+  id             String        @id @default(uuid())
+  userId         String
+  conversationId String
+  characterId    String
+  sender         MessageSender
+  type           MessageType
+  content        String?
+  payload        Json
+  status         String        @default("sent") @db.VarChar(20)
+  quoteMessageId String?
+  aiRequestId    String?
+  createdAt      DateTime      @default(now())
+  deletedAt      DateTime?
+
+  user         User         @relation(fields: [userId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  character    Character    @relation(fields: [characterId], references: [id])
+  aiRequest    AiRequest?   @relation(fields: [aiRequestId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([userId, characterId, createdAt])
+}
+
+model Memory {
+  id              String   @id @default(uuid())
+  userId          String
+  characterId     String
+  content         String
+  type            String   @db.VarChar(30)
+  weight          Int      @default(50)
+  enabled         Boolean  @default(true)
+  sourceMessageId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id])
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@index([characterId, enabled, weight])
+}
+
+model AiRequest {
+  id               String        @id @default(uuid())
+  userId           String
+  characterId      String?
+  conversationId   String?
+  agentRunId       String?
+  provider         ModelProvider
+  modelName        String        @db.VarChar(80)
+  requestType      String        @db.VarChar(30)
+  status           String        @db.VarChar(20)
+  promptTokens     Int?
+  completionTokens Int?
+  latencyMs        Int?
+  errorCode        String?       @db.VarChar(80)
+  errorMessage     String?
+  createdAt        DateTime      @default(now())
+
+  user         User          @relation(fields: [userId], references: [id])
+  character    Character?    @relation(fields: [characterId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  agentRun     AgentRun?     @relation(fields: [agentRunId], references: [id])
+  messages     Message[]
+
+  @@index([agentRunId])
+}
+
+model AgentRun {
+  id              String         @id @default(uuid())
+  traceId         String         @db.VarChar(80)
+  userId          String
+  characterId     String?
+  app             String         @db.VarChar(40)
+  eventType       String         @db.VarChar(80)
+  taskType        String         @db.VarChar(80)
+  status          String         @db.VarChar(30)
+  modelProvider   ModelProvider?
+  modelName       String?        @db.VarChar(80)
+  promptName      String?        @db.VarChar(80)
+  promptVersion   String?        @db.VarChar(40)
+  inputSummary    String?
+  outputSummary   String?
+  contextSnapshot Json?
+  actions         Json?
+  latencyMs       Int?
+  errorCode       String?        @db.VarChar(80)
+  errorMessage    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user       User            @relation(fields: [userId], references: [id])
+  character  Character?      @relation(fields: [characterId], references: [id])
+  aiRequests AiRequest[]
+  toolCalls  AgentToolCall[]
+
+  @@index([traceId])
+  @@index([userId, characterId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AgentEvent {
+  id             String   @id @default(uuid())
+  traceId        String   @db.VarChar(80)
+  userId         String
+  characterId    String?
+  app            String   @db.VarChar(40)
+  type           String   @db.VarChar(80)
+  visibility     String   @db.VarChar(20)
+  source         String   @db.VarChar(20)
+  content        String?
+  payload        Json
+  idempotencyKey String?  @db.VarChar(120)
+  occurredAt     DateTime
+  createdAt      DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id])
+  character Character? @relation(fields: [characterId], references: [id])
+
+  @@unique([userId, idempotencyKey])
+  @@index([traceId])
+  @@index([userId, characterId, occurredAt])
+  @@index([app, type, occurredAt])
+}
+
+model AgentToolCall {
+  id           String   @id @default(uuid())
+  agentRunId   String
+  userId       String
+  characterId  String?
+  toolName     String   @db.VarChar(120)
+  provider     String   @db.VarChar(40)
+  riskLevel    String   @db.VarChar(20)
+  input        Json
+  output       Json?
+  status       String   @db.VarChar(30)
+  latencyMs    Int?
+  errorCode    String?  @db.VarChar(80)
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  agentRun  AgentRun   @relation(fields: [agentRunId], references: [id])
+  user      User       @relation(fields: [userId], references: [id])
+  character Character? @relation(fields: [characterId], references: [id])
+
+  @@index([agentRunId])
+  @@index([userId, characterId, createdAt])
+  @@index([toolName, createdAt])
+}
+
+model AgentState {
+  id          String   @id @default(uuid())
+  userId      String
+  characterId String
+  state       Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id])
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@unique([userId, characterId])
+  @@index([characterId])
+}
+
+model AgentMemory {
+  id            String    @id @default(uuid())
+  userId        String
+  characterId   String
+  scope         String    @db.VarChar(40)
+  type          String    @db.VarChar(40)
+  content       String
+  structured    Json
+  sourceApp     String    @db.VarChar(40)
+  sourceEventId String?
+  confidence    Int       @default(70)
+  weight        Int       @default(50)
+  sensitivity   String    @default("low") @db.VarChar(20)
+  visibility    String    @default("private") @db.VarChar(20)
+  enabled       Boolean   @default(true)
+  lastUsedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id])
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@index([characterId, enabled, weight])
+  @@index([userId, characterId, type])
+  @@index([sourceEventId])
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(uuid())
+  userId     String?
+  eventName  String   @db.VarChar(80)
+  properties Json
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, eventName, createdAt])
+}

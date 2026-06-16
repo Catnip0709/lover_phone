@@ -1,0 +1,9 @@
+node_modules
+.pnpm-store
+dist
+build
+.git
+.trae
+.env
+coverage
+*.log
