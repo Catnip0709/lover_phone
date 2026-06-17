@@ -2,29 +2,57 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from "@nes
 import type { WechatProfileView } from "@myphone/shared";
 import { PrismaService } from "../infra/prisma.service.js";
 
+type ProfileRow = {
+  id: string;
+  userId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  wechatId: string | null;
+  bio: string | null;
+  region: string | null;
+  walletBalanceCents: number;
+  defaultMomentVisibility: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type UserRow = {
+  username: string;
+  nickname: string | null;
+  avatar: string | null;
+  bio: string | null;
+  region: string | null;
+};
+
 @Injectable()
 export class WechatProfileService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getProfile(userId: string): Promise<WechatProfileView> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        username: true,
+        nickname: true,
+        avatar: true,
+        bio: true,
+        region: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException("用户不存在");
+    }
+
     let profile = await this.prisma.wechatProfile.findUnique({
       where: { userId },
     });
 
     if (!profile) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { username: true, nickname: true },
-      });
-
-      if (!user) {
-        throw new NotFoundException("用户不存在");
-      }
-
       profile = await this.prisma.wechatProfile.create({
         data: {
           userId,
-          displayName: user.nickname ?? user.username,
+          displayName: null,
           avatarUrl: null,
           wechatId: null,
           bio: null,
@@ -35,27 +63,27 @@ export class WechatProfileService {
       });
     }
 
-    return this.toView(profile);
+    return this.toView(profile as ProfileRow, user as UserRow);
   }
 
   async updateProfile(userId: string, input: {
-    displayName?: string;
+    displayName?: string | null;
     avatarUrl?: string | null;
     bio?: string | null;
     region?: string | null;
     wechatId?: string | null;
     defaultMomentVisibility?: string;
   }): Promise<WechatProfileView> {
-    let profile = await this.prisma.wechatProfile.findUnique({
+    const existing = await this.prisma.wechatProfile.findUnique({
       where: { userId },
     });
 
-    if (!profile) {
+    if (!existing) {
       return this.getProfile(userId);
     }
 
     const updateData: {
-      displayName?: string;
+      displayName?: string | null;
       avatarUrl?: string | null;
       bio?: string | null;
       region?: string | null;
@@ -64,22 +92,19 @@ export class WechatProfileService {
     } = {};
 
     if (input.displayName !== undefined) {
-      if (!input.displayName.trim()) {
-        throw new BadRequestException("显示名称不能为空");
-      }
-      updateData.displayName = input.displayName.trim();
+      updateData.displayName = normalizeOptional(input.displayName);
     }
     if (input.avatarUrl !== undefined) {
-      updateData.avatarUrl = input.avatarUrl?.trim() || null;
+      updateData.avatarUrl = normalizeOptional(input.avatarUrl);
     }
     if (input.bio !== undefined) {
-      updateData.bio = input.bio?.trim() || null;
+      updateData.bio = normalizeOptional(input.bio);
     }
     if (input.region !== undefined) {
-      updateData.region = input.region?.trim() || null;
+      updateData.region = normalizeOptional(input.region);
     }
     if (input.wechatId !== undefined) {
-      updateData.wechatId = input.wechatId?.trim() || null;
+      updateData.wechatId = normalizeOptional(input.wechatId);
     }
     if (input.defaultMomentVisibility !== undefined) {
       if (!["public", "private", "partial"].includes(input.defaultMomentVisibility)) {
@@ -88,27 +113,21 @@ export class WechatProfileService {
       updateData.defaultMomentVisibility = input.defaultMomentVisibility;
     }
 
-    const updated = await this.prisma.wechatProfile.update({
+    await this.prisma.wechatProfile.update({
       where: { userId },
       data: updateData,
     });
 
-    return this.toView(updated);
+    return this.getProfile(userId);
   }
 
-  private toView(profile: {
-    id: string;
-    userId: string;
-    displayName: string;
-    avatarUrl: string | null;
-    wechatId: string | null;
-    bio: string | null;
-    region: string | null;
-    walletBalanceCents: number;
-    defaultMomentVisibility: string;
-    createdAt: Date;
-    updatedAt: Date;
-  }): WechatProfileView {
+  private toView(profile: ProfileRow, user: UserRow): WechatProfileView {
+    const fallbackName = user.nickname?.trim() || user.username;
+    const effectiveDisplayName = profile.displayName?.trim() || fallbackName;
+    const effectiveAvatarUrl = profile.avatarUrl ?? user.avatar ?? null;
+    const effectiveBio = profile.bio ?? user.bio ?? null;
+    const effectiveRegion = profile.region ?? user.region ?? null;
+
     return {
       id: profile.id,
       userId: profile.userId,
@@ -119,8 +138,20 @@ export class WechatProfileService {
       region: profile.region,
       walletBalanceCents: profile.walletBalanceCents,
       defaultMomentVisibility: profile.defaultMomentVisibility as "public" | "private" | "partial",
+      effectiveDisplayName,
+      effectiveAvatarUrl,
+      effectiveBio,
+      effectiveRegion,
       createdAt: profile.createdAt.toISOString(),
       updatedAt: profile.updatedAt.toISOString(),
     };
   }
+}
+
+function normalizeOptional(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
 }

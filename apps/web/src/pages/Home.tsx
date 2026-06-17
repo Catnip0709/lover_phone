@@ -106,7 +106,7 @@ export default function Home() {
                   <DockIcon
                     className="bg-[#64748b]"
                     icon={<Settings className="h-6 w-6 text-white" />}
-                    onClick={() => navigate("/settings/model")}
+                    onClick={() => navigate("/settings")}
                   />
                 </div>
               </div>

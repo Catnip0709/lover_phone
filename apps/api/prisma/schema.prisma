@@ -40,6 +40,10 @@ model User {
   passwordHash String
   nickname     String?   @db.VarChar(40)
   avatar       String?
+  birthday     String?   @db.VarChar(40)
+  gender       String?   @db.VarChar(20)
+  bio          String?   @db.VarChar(200)
+  region       String?   @db.VarChar(80)
   ageConfirmed Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -339,7 +343,7 @@ model AgentMemory {
 model WechatProfile {
   id                       String   @id @default(uuid())
   userId                   String   @unique
-  displayName              String   @db.VarChar(40)
+  displayName              String?  @db.VarChar(40)
   avatarUrl                String?
   wechatId                 String?  @db.VarChar(40)
   bio                      String?  @db.VarChar(160)

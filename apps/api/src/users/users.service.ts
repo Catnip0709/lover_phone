@@ -1,6 +1,21 @@
-import { ConflictException, Inject, Injectable } from "@nestjs/common";
-import type { AuthUser } from "@myphone/shared";
+import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import type { AuthUser, MeProfileView } from "@myphone/shared";
 import { PrismaService } from "../infra/prisma.service.js";
+import type { PatchMeProfileInput } from "./users.schemas.js";
+
+type UserRecord = {
+  id: string;
+  username: string;
+  nickname: string | null;
+  avatar: string | null;
+  birthday: string | null;
+  gender: string | null;
+  bio: string | null;
+  region: string | null;
+  ageConfirmed: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 @Injectable()
 export class UsersService {
@@ -58,6 +73,48 @@ export class UsersService {
     return this.toAuthUser(user);
   }
 
+  async getMeProfile(userId: string): Promise<MeProfileView> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
+
+    if (!user) {
+      throw new NotFoundException("用户不存在");
+    }
+
+    return this.toMeProfileView(user as UserRecord);
+  }
+
+  async updateMeProfile(userId: string, input: PatchMeProfileInput): Promise<MeProfileView> {
+    const data: Record<string, string | null> = {};
+
+    if (input.nickname !== undefined) {
+      data.nickname = normalizeOptional(input.nickname);
+    }
+    if (input.avatar !== undefined) {
+      data.avatar = normalizeOptional(input.avatar);
+    }
+    if (input.birthday !== undefined) {
+      data.birthday = normalizeOptional(input.birthday);
+    }
+    if (input.gender !== undefined) {
+      data.gender = input.gender;
+    }
+    if (input.bio !== undefined) {
+      data.bio = normalizeOptional(input.bio);
+    }
+    if (input.region !== undefined) {
+      data.region = normalizeOptional(input.region);
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+
+    return this.toMeProfileView(user as UserRecord);
+  }
+
   toAuthUser(user: {
     id: string;
     username: string;
@@ -73,4 +130,28 @@ export class UsersService {
       createdAt: user.createdAt.toISOString(),
     };
   }
+
+  private toMeProfileView(user: UserRecord): MeProfileView {
+    return {
+      id: user.id,
+      username: user.username,
+      nickname: user.nickname,
+      avatar: user.avatar,
+      birthday: user.birthday,
+      gender: (user.gender as MeProfileView["gender"]) ?? null,
+      bio: user.bio,
+      region: user.region,
+      ageConfirmed: user.ageConfirmed,
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+    };
+  }
+}
+
+function normalizeOptional(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
 }

@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 export const patchProfileSchema = z.object({
-  displayName: z.string().min(1).max(40).optional(),
-  avatarUrl: z.string().url().nullable().optional(),
+  displayName: z.string().max(40).nullable().optional(),
+  avatarUrl: z.string().max(2048).nullable().optional(),
   bio: z.string().max(200).nullable().optional(),
   region: z.string().max(80).nullable().optional(),
   wechatId: z.string().max(40).nullable().optional(),

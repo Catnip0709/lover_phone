@@ -1,4 +1,5 @@
 import type {
+  ChatStreamEvent,
   ConversationProfileView,
   ConversationView,
   MessageView,
@@ -50,6 +51,68 @@ export function sendMessage(
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export type ChatStreamHandlers = {
+  onEvent?: (event: ChatStreamEvent) => void | Promise<void>;
+  signal?: AbortSignal;
+};
+
+export async function sendMessageStream(
+  accessToken: string,
+  conversationId: string,
+  input: SendMessageRequest,
+  handlers: ChatStreamHandlers = {},
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(input),
+    signal: handlers.signal,
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message ?? `请求失败：${response.status}`);
+  }
+
+  if (!response.body) {
+    throw new Error("流式响应为空");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary !== -1) {
+      const rawEvent = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      boundary = buffer.indexOf("\n\n");
+
+      for (const line of rawEvent.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(payload) as ChatStreamEvent;
+          await handlers.onEvent?.(parsed);
+        } catch {
+          // 忽略损坏的事件
+        }
+      }
+    }
+  }
 }
 
 export function markConversationRead(

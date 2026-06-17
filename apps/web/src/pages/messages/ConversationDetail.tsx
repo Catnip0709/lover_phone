@@ -6,7 +6,7 @@ import {
   getConversationProfile,
   listMessages,
   markConversationRead,
-  sendMessage,
+  sendMessageStream,
 } from "@/api/conversations";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { MessageBubble } from "@/components/messages/MessageBubble";
@@ -97,13 +97,45 @@ export default function ConversationDetail() {
     setFailedDraft(null);
 
     try {
-      const response = await sendMessage(accessToken, id, { content: nextContent });
-      setMessages((current) =>
-        current
-          .map((message) => (message.id === optimisticUserMessage.id ? response.userMessage : message))
-          .concat(response.aiMessage),
+      let userMessageReplaced = false;
+      let lastSeenAt = 0;
+      const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+      await sendMessageStream(
+        accessToken,
+        id,
+        { content: nextContent },
+        {
+          onEvent: async (event) => {
+            if (event.type === "user_message") {
+              setMessages((current) =>
+                current.map((message) =>
+                  message.id === optimisticUserMessage.id ? event.data : message,
+                ),
+              );
+              userMessageReplaced = true;
+            } else if (event.type === "ai_message") {
+              const text = event.data.message.content ?? "";
+              const charDelay = Math.min(2200, Math.max(450, text.length * 90));
+              const since = lastSeenAt === 0 ? 0 : Date.now() - lastSeenAt;
+              const wait = lastSeenAt === 0 ? 380 : Math.max(0, charDelay - since);
+              if (wait > 0) {
+                await sleep(wait);
+              }
+              setMessages((current) => [...current, event.data.message]);
+              lastSeenAt = Date.now();
+            } else if (event.type === "all_done") {
+              setConversation(event.data.conversation);
+            } else if (event.type === "error") {
+              throw new Error(event.data.message);
+            }
+          },
+        },
       );
-      setConversation(response.conversation);
+      if (!userMessageReplaced) {
+        setMessages((current) =>
+          current.filter((message) => message.id !== optimisticUserMessage.id),
+        );
+      }
     } catch (requestError) {
       setInput(nextContent);
       setFailedDraft(nextContent);
@@ -151,17 +183,41 @@ export default function ConversationDetail() {
     setSending(true);
 
     try {
-      const response = await sendMessage(accessToken, id, {
-        content,
-        type: messageType,
-        payload,
-      });
-      setMessages((current) =>
-        current
-          .map((message) => (message.id === optimisticMessage.id ? response.userMessage : message))
-          .concat(response.aiMessage),
+      let userMessageReplaced = false;
+      let lastSeenAt = 0;
+      const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+      await sendMessageStream(
+        accessToken,
+        id,
+        { content, type: messageType, payload },
+        {
+          onEvent: async (event) => {
+            if (event.type === "user_message") {
+              setMessages((current) =>
+                current.map((message) =>
+                  message.id === optimisticMessage.id ? event.data : message,
+                ),
+              );
+              userMessageReplaced = true;
+            } else if (event.type === "ai_message") {
+              const text = event.data.message.content ?? "";
+              const charDelay = Math.min(2200, Math.max(450, text.length * 90));
+              const since = lastSeenAt === 0 ? 0 : Date.now() - lastSeenAt;
+              const wait = lastSeenAt === 0 ? 380 : Math.max(0, charDelay - since);
+              if (wait > 0) await sleep(wait);
+              setMessages((current) => [...current, event.data.message]);
+              lastSeenAt = Date.now();
+            } else if (event.type === "all_done") {
+              setConversation(event.data.conversation);
+            } else if (event.type === "error") {
+              throw new Error(event.data.message);
+            }
+          },
+        },
       );
-      setConversation(response.conversation);
+      if (!userMessageReplaced) {
+        setMessages((current) => current.filter((message) => message.id !== optimisticMessage.id));
+      }
     } catch (requestError) {
       setMessages((current) => current.filter((message) => message.id !== optimisticMessage.id));
       setError(requestError instanceof Error ? requestError.message : "发送失败");

@@ -215,6 +215,129 @@ export class AgentActionExecutorService {
     return Boolean(character?.isActive);
   }
 
+  async appendWechatStreamSentence(input: {
+    userId: string;
+    characterId: string;
+    conversationId: string;
+    sentence: string;
+    isFirst: boolean;
+    metadata?: {
+      provider?: ModelProvider;
+      modelName?: string;
+      relationship?: RelationshipProgressView;
+      aiRequestId?: string;
+    };
+  }): Promise<WechatSendExecution["message"]> {
+    const safeContent = this.agentPolicy.sanitizeOutput({
+      content: input.sentence,
+      app: "wechat",
+    });
+
+    if (!safeContent) {
+      throw new BadRequestException("Sanitized stream sentence is empty");
+    }
+
+    const message = await this.prisma.$transaction(async (tx) => {
+      const ownedConversation = await tx.conversation.findFirst({
+        where: {
+          id: input.conversationId,
+          userId: input.userId,
+          characterId: input.characterId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (!ownedConversation) {
+        throw new ForbiddenException("Agent action cannot write to this conversation");
+      }
+
+      const created = await tx.message.create({
+        data: {
+          userId: input.userId,
+          conversationId: input.conversationId,
+          characterId: input.characterId,
+          sender: "character",
+          type: "text",
+          content: safeContent,
+          payload: {
+            source: "agent_action_executor.stream",
+            provider: input.metadata?.provider,
+            modelName: input.metadata?.modelName,
+            relationship: input.metadata?.relationship,
+            stream: true,
+            firstChunk: input.isFirst,
+          },
+          aiRequestId: input.metadata?.aiRequestId,
+        },
+      });
+
+      await tx.conversation.update({
+        where: { id: input.conversationId },
+        data: {
+          unreadCount: 0,
+          lastMessagePreview: safeContent,
+          lastMessageAt: created.createdAt,
+        },
+      });
+
+      return created;
+    });
+
+    return {
+      id: message.id,
+      conversationId: message.conversationId,
+      characterId: message.characterId,
+      sender: "character",
+      type: "text",
+      content: message.content,
+      payload: message.payload,
+      status: message.status,
+      createdAt: message.createdAt,
+    };
+  }
+
+  async finalizeWechatStream(input: {
+    userId: string;
+    conversationId: string;
+    aiRequestId?: string;
+    startedAt?: number;
+  }): Promise<WechatSendExecution["conversation"]> {
+    if (input.aiRequestId) {
+      await this.prisma.aiRequest
+        .update({
+          where: { id: input.aiRequestId },
+          data: {
+            status: "success",
+            latencyMs:
+              typeof input.startedAt === "number" ? Date.now() - input.startedAt : undefined,
+          },
+        })
+        .catch(() => undefined);
+    }
+
+    const conversation = await this.prisma.conversation.findUniqueOrThrow({
+      where: { id: input.conversationId },
+      include: {
+        character: {
+          select: {
+            id: true,
+            name: true,
+            nickname: true,
+            avatarPreset: true,
+            structuredProfile: true,
+          },
+        },
+      },
+    });
+
+    if (conversation.userId !== input.userId) {
+      throw new ForbiddenException("Conversation not owned");
+    }
+
+    return conversation;
+  }
+
   private async executeWechatSendMessage(input: {
     userId: string;
     characterId: string;

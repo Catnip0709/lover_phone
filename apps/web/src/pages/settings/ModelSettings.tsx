@@ -1,6 +1,6 @@
-import { ArrowLeft, CheckCircle2, KeyRound, Loader2, LogOut, PlugZap, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, KeyRound, Loader2, PlugZap, Save } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import type { ModelConfigView, ModelProvider } from "@myphone/shared";
 import {
   createModelConfig,
@@ -29,8 +29,7 @@ const providerOptions: Array<{
 ];
 
 export default function ModelSettings() {
-  const navigate = useNavigate();
-  const { accessToken, logout } = useAuthStore();
+  const { accessToken } = useAuthStore();
   const [configs, setConfigs] = useState<ModelConfigView[]>([]);
   const [provider, setProvider] = useState<ModelProvider>("deepseek");
   const [modelName, setModelName] = useState("deepseek-v4-flash");
@@ -133,9 +132,9 @@ export default function ModelSettings() {
     <main className="relative min-h-screen overflow-hidden bg-[#fff4f8] px-5 py-6 text-slate-950 sm:px-8">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_15%,rgba(255,203,220,0.38),transparent_32%),radial-gradient(circle_at_85%_5%,rgba(201,228,255,0.4),transparent_28%),linear-gradient(135deg,#fff7fb,#ffffff_48%,#edf7ff)]" />
       <div className="relative w-full">
-        <Link className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900" to="/phone">
+        <Link className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900" to="/settings">
           <ArrowLeft className="h-4 w-4" />
-          返回小手机
+          返回设置
         </Link>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
@@ -180,28 +179,6 @@ export default function ModelSettings() {
                   </button>
                 ))
               )}
-            </div>
-
-            <div className="mt-6 rounded-3xl border border-white/70 bg-white/50 p-4">
-              <p className="text-sm font-medium text-slate-700">账号</p>
-              <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
-                <Link className="rounded-full bg-white/70 px-3 py-2 hover:text-slate-900" to="/legal/terms">
-                  用户协议
-                </Link>
-                <Link className="rounded-full bg-white/70 px-3 py-2 hover:text-slate-900" to="/legal/privacy">
-                  隐私政策
-                </Link>
-                <button
-                  className="inline-flex items-center rounded-full bg-white/70 px-3 py-2 text-red-500 hover:text-red-600"
-                  onClick={() => {
-                    void logout().then(() => navigate("/login", { replace: true }));
-                  }}
-                  type="button"
-                >
-                  <LogOut className="mr-1.5 h-3.5 w-3.5" />
-                  退出登录
-                </button>
-              </div>
             </div>
           </section>
 

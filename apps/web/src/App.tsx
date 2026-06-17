@@ -8,11 +8,15 @@ import CharacterList from "@/pages/characters/CharacterList";
 import ImportCharacter from "@/pages/characters/ImportCharacter";
 import NewCharacter from "@/pages/characters/NewCharacter";
 import LegalPage from "@/pages/legal/LegalPage";
+import MeProfileEdit from "@/pages/me/MeProfileEdit";
 import ConversationDetail from "@/pages/messages/ConversationDetail";
 import WechatProfileEdit from "@/pages/wechat/WechatProfileEdit";
 import WechatShell from "@/pages/wechat/WechatShell";
 import WechatMomentNew from "@/pages/wechat/WechatMomentNew";
 import ModelSettings from "@/pages/settings/ModelSettings";
+import AboutSettings from "@/pages/settings/AboutSettings";
+import PrivacySettings from "@/pages/settings/PrivacySettings";
+import SettingsHome from "@/pages/settings/SettingsHome";
 import { useAuthStore } from "@/stores/auth-store";
 
 export default function App() {
@@ -57,6 +61,10 @@ export default function App() {
         />
         <Route path="/messages" element={user ? <WechatShell /> : <Navigate to="/login" replace />} />
         <Route
+          path="/me/profile"
+          element={user ? <MeProfileEdit /> : <Navigate to="/login" replace />}
+        />
+        <Route
           path="/messages/me/edit"
           element={user ? <WechatProfileEdit /> : <Navigate to="/login" replace />}
         />
@@ -69,8 +77,20 @@ export default function App() {
           element={user ? <ConversationDetail /> : <Navigate to="/login" replace />}
         />
         <Route
+          path="/settings"
+          element={user ? <SettingsHome /> : <Navigate to="/login" replace />}
+        />
+        <Route
           path="/settings/model"
           element={user ? <ModelSettings /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/settings/privacy"
+          element={user ? <PrivacySettings /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/settings/about"
+          element={user ? <AboutSettings /> : <Navigate to="/login" replace />}
         />
         <Route path="*" element={<Navigate to="/phone" replace />} />
       </Routes>

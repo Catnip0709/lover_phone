@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
-import { json, urlencoded } from "express";
+import express, { json, urlencoded } from "express";
+import { join } from "node:path";
 import { AppModule } from "./app.module.js";
 import { ApiExceptionFilter } from "./common/api-exception.filter.js";
 
@@ -13,6 +14,7 @@ async function bootstrap() {
 
   app.use(json({ limit: "5mb" }));
   app.use(urlencoded({ extended: true, limit: "5mb" }));
+  app.use("/uploads", express.static(join(process.cwd(), "uploads")));
   app.setGlobalPrefix("api");
   app.useGlobalFilters(new ApiExceptionFilter());
   app.enableCors({

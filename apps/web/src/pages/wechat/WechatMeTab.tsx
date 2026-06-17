@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { WechatProfileView } from "@myphone/shared";
 import { getWechatProfile, rechargeWallet } from "@/api/wechat";
+import { resolveAssetUrl } from "@/api/users";
 import { useAuthStore } from "@/stores/auth-store";
 
 export default function WechatMeTab() {
@@ -31,8 +32,9 @@ export default function WechatMeTab() {
       .finally(() => setLoading(false));
   }, [accessToken]);
 
-  const displayName = profile?.displayName ?? "用户";
-  const avatarUrl = profile?.avatarUrl;
+  const displayName = profile?.effectiveDisplayName ?? "用户";
+  const avatarUrl = resolveAssetUrl(profile?.effectiveAvatarUrl ?? null);
+  const bio = profile?.effectiveBio;
 
   async function handleRecharge(amount: 6 | 66 | 666) {
     if (!accessToken || chargingAmount) {
@@ -84,8 +86,8 @@ export default function WechatMeTab() {
             <p className="mt-1 text-sm text-slate-400">
               微信号：{profile?.wechatId ?? "未设置"}
             </p>
-            {profile?.bio && (
-              <p className="mt-1 truncate text-sm text-slate-400">{profile.bio}</p>
+            {bio && (
+              <p className="mt-1 truncate text-sm text-slate-400">{bio}</p>
             )}
           </div>
 

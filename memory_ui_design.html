@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>记忆日记本 - 简化版</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #FAF7F2;           /* 米色背景 */
+      --bg-card: #FFFFFF;       /* 卡片白色 */
+      --text: #2C2C2C;          /* 主文字 */
+      --text-light: #8A8A8A;    /* 次要文字 */
+      --border: #E8E4DD;        /* 边框 */
+      --divider: #F0ECE4;       /* 分割线 */
+
+      /* 角色颜色 */
+      --char-1: #E8A87C;        /* 暖橙 - 小明 */
+      --char-2: #C38D9E;        /* 玫瑰 - 小红 */
+      --char-3: #7FB3D5;        /* 浅蓝 - 小刚 */
+      --char-4: #7D8A7A;        /* 橄榄 - 系统 */
+
+      --shadow: 0 2px 12px rgba(0,0,0,0.04);
+      --radius: 16px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Serif SC', serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+
+    /* ========== 页面容器 ========== */
+    .page {
+      max-width: 440px;
+      margin: 0 auto;
+      padding: 20px 16px 100px;
+    }
+
+    /* ========== 顶部标题 ========== */
+    .header {
+      text-align: center;
+      padding: 16px 0 20px;
+    }
+
+    .header h1 {
+      font-family: 'ZCOOL XiaoWei', serif;
+      font-size: 22px;
+      font-weight: 400;
+      letter-spacing: 2px;
+    }
+
+    .header p {
+      font-size: 12px;
+      color: var(--text-light);
+      margin-top: 6px;
+    }
+
+    /* ========== 角色切换 Tab（核心改进）========== */
+    .character-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 8px 0 20px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .character-tabs::-webkit-scrollbar { display: none; }
+
+    .char-tab {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: 999px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+
+    .char-tab:hover {
+      transform: translateY(-1px);
+    }
+
+    .char-tab.active {
+      border-color: var(--char-1);
+      background: #FFF9F0;
+    }
+
+    .char-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: white;
+    }
+
+    .char-name {
+      font-size: 14px;
+    }
+
+    .char-count {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    /* 每个角色的颜色 */
+    .char-tab[data-char="1"] .char-avatar { background: var(--char-1); }
+    .char-tab[data-char="2"] .char-avatar { background: var(--char-2); }
+    .char-tab[data-char="3"] .char-avatar { background: var(--char-3); }
+    .char-tab[data-char="4"] .char-avatar { background: var(--char-4); }
+
+    .char-tab[data-char="1"].active { border-color: var(--char-1); background: #FFF9F0; }
+    .char-tab[data-char="2"].active { border-color: var(--char-2); background: #FDF4F6; }
+    .char-tab[data-char="3"].active { border-color: var(--char-3); background: #F0F6FA; }
+    .char-tab[data-char="4"].active { border-color: var(--char-4); background: #F4F6F3; }
+
+    /* ========== 简化筛选栏 ========== */
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      padding: 0 0 20px;
+    }
+
+    .filter-chip {
+      padding: 8px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 13px;
+      color: var(--text-light);
+      cursor: pointer;
+    }
+
+    .filter-chip.active {
+      background: var(--text);
+      color: white;
+      border-color: var(--text);
+    }
+
+    /* ========== 新增按钮（简化为浮动按钮） ========== */
+    .fab {
+      position: fixed;
+      right: 20px;
+      bottom: 90px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--text);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      z-index: 50;
+    }
+
+    .fab:hover { transform: scale(1.05); }
+
+    /* ========== 时间分组（简化） ========== */
+    .time-group {
+      margin-top: 8px;
+    }
+
+    .time-label {
+      font-size: 12px;
+      color: var(--text-light);
+      padding: 0 4px 8px;
+      letter-spacing: 1px;
+    }
+
+    /* ========== 记忆卡片（简化版）========== */
+    .memory-card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+      position: relative;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      transition: all 0.2s;
+      border-left: 3px solid var(--border);
+    }
+
+    .memory-card:hover {
+      transform: translateX(2px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+
+    /* 角色颜色左边条 */
+    .memory-card[data-char="1"] { border-left-color: var(--char-1); }
+    .memory-card[data-char="2"] { border-left-color: var(--char-2); }
+    .memory-card[data-char="3"] { border-left-color: var(--char-3); }
+    .memory-card[data-char="4"] { border-left-color: var(--char-4); }
+
+    /* 卡片头部：角色 + 类型 + 时间 */
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .card-char {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+    }
+
+    .card-char-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: white;
+    }
+
+    .memory-card[data-char="1"] .card-char-avatar { background: var(--char-1); }
+    .memory-card[data-char="2"] .card-char-avatar { background: var(--char-2); }
+    .memory-card[data-char="3"] .card-char-avatar { background: var(--char-3); }
+    .memory-card[data-char="4"] .card-char-avatar { background: var(--char-4); }
+
+    .card-type {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .card-time {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    /* 卡片正文 */
+    .card-content {
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--text);
+    }
+
+    /* 卡片底部操作（简化，点击展开时才显示） */
+    .card-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--divider);
+    }
+
+    .card-action {
+      font-size: 13px;
+      color: var(--text-light);
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .card-action:hover {
+      background: var(--divider);
+      color: var(--text);
+    }
+
+    .card-action.edit { color: #4A90A4; }
+    .card-action.delete { color: #C38D9E; }
+
+    /* 置顶标记 */
+    .pin-icon {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 14px;
+      color: var(--char-1);
+    }
+
+    /* ========== 空状态（简化） ========== */
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      opacity: 0.3;
+      margin-bottom: 12px;
+    }
+
+    .empty-title {
+      font-family: 'ZCOOL XiaoWei', serif;
+      font-size: 18px;
+      color: var(--text-light);
+    }
+
+    .empty-desc {
+      font-size: 13px;
+      color: var(--text-light);
+      margin-top: 6px;
+    }
+
+    /* ========== 底部导航 ========== */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top: 1px solid var(--divider);
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+      z-index: 40;
+    }
+
+    .nav-item {
+      text-align: center;
+      padding: 4px 12px;
+      cursor: pointer;
+    }
+
+    .nav-icon {
+      font-size: 20px;
+      display: block;
+    }
+
+    .nav-label {
+      font-size: 11px;
+      color: var(--text-light);
+      margin-top: 2px;
+    }
+
+    .nav-item.active .nav-icon { color: var(--text); }
+    .nav-item.active .nav-label { color: var(--text); font-weight: 600; }
+
+    /* ========== 详情页样式（简化） ========== */
+    .detail-page {
+      padding: 16px;
+    }
+
+    .back-btn {
+      font-size: 24px;
+      cursor: pointer;
+      padding: 8px 0;
+      display: inline-block;
+    }
+
+    .detail-card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      border-left: 4px solid var(--char-1);
+    }
+
+    .detail-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--text-light);
+    }
+
+    .detail-char {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+    }
+
+    .detail-content {
+      font-size: 16px;
+      line-height: 1.9;
+      margin-bottom: 16px;
+    }
+
+    .detail-note {
+      font-size: 12px;
+      color: var(--text-light);
+      padding: 12px;
+      background: var(--bg);
+      border-radius: 10px;
+    }
+
+    /* 详细信息面板 */
+    .info-panel {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .info-title {
+      font-family: 'ZCOOL XiaoWei', serif;
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      font-size: 13px;
+      border-bottom: 1px solid var(--divider);
+    }
+
+    .info-row:last-child { border-bottom: none; }
+    .info-key { color: var(--text-light); }
+    .info-val { color: var(--text); }
+
+    /* 底部操作区 */
+    .detail-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 14px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn-edit {
+      background: var(--text);
+      color: white;
+    }
+
+    .btn-delete {
+      background: transparent;
+      border: 1px solid #C38D9E;
+      color: #C38D9E;
+    }
+
+    /* ========== 编辑页样式（简化） ========== */
+    .form-section {
+      margin-bottom: 24px;
+    }
+
+    .form-label {
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 10px;
+      display: block;
+    }
+
+    /* 类型选择器（简化：4个彩色圆角按钮） */
+    .type-selector {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .type-btn {
+      padding: 16px 8px;
+      text-align: center;
+      border-radius: 12px;
+      cursor: pointer;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .type-btn:hover { transform: translateY(-2px); }
+
+    .type-btn.selected {
+      background: var(--char-1);
+      border-color: var(--char-1);
+      color: white;
+    }
+
+    .type-btn .icon { font-size: 20px; display: block; margin-bottom: 4px; }
+    .type-btn .name { font-size: 12px; }
+
+    /* 文本域 */
+    .form-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: inherit;
+      font-size: 15px;
+      color: var(--text);
+      resize: vertical;
+      line-height: 1.8;
+    }
+
+    .form-textarea:focus {
+      outline: none;
+      border-color: var(--char-1);
+    }
+
+    .char-count {
+      text-align: right;
+      font-size: 12px;
+      color: var(--text-light);
+      margin-top: 8px;
+    }
+
+    /* 角色选择（单选） */
+    .char-selector {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .char-opt {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .char-opt.selected {
+      border-color: var(--char-1);
+      background: #FFF9F0;
+    }
+
+    .char-opt-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: white;
+    }
+
+    /* 可见范围 */
+    .visibility-selector {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .vis-opt {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+    }
+
+    .vis-opt.selected {
+      border-color: var(--char-1);
+      background: #FFF9F0;
+    }
+
+    .vis-radio {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .vis-opt.selected .vis-radio {
+      border-color: var(--char-1);
+      background: var(--char-1);
+      box-shadow: inset 0 0 0 4px white;
+    }
+
+    .vis-title { font-size: 14px; }
+    .vis-desc { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+
+    /* 保存/取消按钮 */
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      padding-top: 16px;
+    }
+
+    .btn-cancel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-light);
+    }
+
+    .btn-save {
+      background: var(--text);
+      color: white;
+    }
+
+    /* ========== 示例分隔线 ========== */
+    .demo-divider {
+      margin: 40px 0 20px;
+      padding: 20px 0;
+      border-top: 2px dashed var(--divider);
+      text-align: center;
+      font-family: 'ZCOOL XiaoWei', serif;
+      font-size: 14px;
+      color: var(--text-light);
+    }
+
+    /* ========== 响应式 ========== */
+    @media (min-width: 640px) {
+      .page { max-width: 560px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========== 首页：记忆列表 ========== -->
+  <div class="page">
+    <div class="header">
+      <h1>记忆日记本</h1>
+      <p>记录与每个角色的珍贵回忆</p>
+    </div>
+
+    <!-- 角色切换 Tab（核心改进：用角色而不是类型作为主要筛选） -->
+    <div class="character-tabs">
+      <div class="char-tab active" data-char="1">
+        <div class="char-avatar">明</div>
+        <span class="char-name">小明</span>
+        <span class="char-count">· 45</span>
+      </div>
+      <div class="char-tab" data-char="2">
+        <div class="char-avatar">红</div>
+        <span class="char-name">小红</span>
+        <span class="char-count">· 42</span>
+      </div>
+      <div class="char-tab" data-char="3">
+        <div class="char-avatar">刚</div>
+        <span class="char-name">小刚</span>
+        <span class="char-count">· 18</span>
+      </div>
+      <div class="char-tab" data-char="4">
+        <div class="char-avatar">🌐</div>
+        <span class="char-name">全局记忆</span>
+        <span class="char-count">· 12</span>
+      </div>
+    </div>
+
+    <!-- 简化筛选：只保留类型（记忆类型相对次要） -->
+    <div class="filter-bar">
+      <div class="filter-chip active">全部</div>
+      <div class="filter-chip">👤 人物</div>
+      <div class="filter-chip">💡 偏好</div>
+      <div class="filter-chip">💭 情绪</div>
+      <div class="filter-chip">📌 约定</div>
+    </div>
+
+    <!-- 时间分组 + 卡片 -->
+    <div class="time-group">
+      <div class="time-label">今天 · 2 条</div>
+
+      <!-- 卡片 1：小明的记忆 -->
+      <div class="memory-card" data-char="1">
+        <div class="card-head">
+          <div class="card-char">
+            <span class="card-char-avatar">明</span>
+            <span>小明</span>
+            <span class="card-type">· 人物档案</span>
+          </div>
+          <span class="card-time">14:30</span>
+        </div>
+        <div class="card-content">用户名字/称呼是「小明」，喜欢被温柔对待</div>
+      </div>
+
+      <!-- 卡片 2：小红的记忆（置顶） -->
+      <div class="memory-card" data-char="2">
+        <span class="pin-icon">📌</span>
+        <div class="card-head">
+          <div class="card-char">
+            <span class="card-char-avatar">红</span>
+            <span>小红</span>
+            <span class="card-type">· 约定</span>
+          </div>
+          <span class="card-time">09:15</span>
+        </div>
+        <div class="card-content">下周见面，记得带蛋糕</div>
+      </div>
+    </div>
+
+    <div class="time-group" style="margin-top: 24px;">
+      <div class="time-label">昨天 · 3 条</div>
+
+      <!-- 卡片 3：小刚 -->
+      <div class="memory-card" data-char="3">
+        <div class="card-head">
+          <div class="card-char">
+            <span class="card-char-avatar">刚</span>
+            <span>小刚</span>
+            <span class="card-type">· 偏好</span>
+          </div>
+          <span class="card-time">20:45</span>
+        </div>
+        <div class="card-content">用户喜欢看电影，特别是科幻片</div>
+      </div>
+
+      <!-- 卡片 4：小红（情绪）-->
+      <div class="memory-card" data-char="2">
+        <div class="card-head">
+          <div class="card-char">
+            <span class="card-char-avatar">红</span>
+            <span>小红</span>
+            <span class="card-type">· 情绪</span>
+          </div>
+          <span class="card-time">18:30</span>
+        </div>
+        <div class="card-content">用户今天很开心，因为工作顺利完成了</div>
+      </div>
+
+      <!-- 卡片 5：全局记忆 -->
+      <div class="memory-card" data-char="4">
+        <div class="card-head">
+          <div class="card-char">
+            <span class="card-char-avatar">🌐</span>
+            <span>所有角色</span>
+            <span class="card-type">· 人物档案</span>
+          </div>
+          <span class="card-time">12:00</span>
+        </div>
+        <div class="card-content">用户住在上海，有一只橘猫叫豆豆</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 浮动新增按钮 -->
+  <button class="fab">+</button>
+
+  <!-- 底部导航 -->
+  <nav class="bottom-nav">
+    <div class="nav-item">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">首页</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">💬</span>
+      <span class="nav-label">对话</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">📷</span>
+      <span class="nav-label">朋友圈</span>
+    </div>
+    <div class="nav-item active">
+      <span class="nav-icon">📔</span>
+      <span class="nav-label">记忆</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">👤</span>
+      <span class="nav-label">我的</span>
+    </div>
+  </nav>
+
+  <!-- ========== 详情页示例 ========== -->
+  <div class="demo-divider">—— 详情页 ——</div>
+
+  <div class="page">
+    <span class="back-btn">←</span>
+
+    <div class="detail-card" style="border-left-color: var(--char-1);">
+      <div class="detail-meta">
+        <div class="detail-char">
+          <span class="card-char-avatar" style="background: var(--char-1);">明</span>
+          <span>小明</span>
+        </div>
+        <span>· 人物档案 · 14:30</span>
+      </div>
+      <div class="detail-content">
+        用户名字/称呼是「小明」，喜欢被温柔对待
+      </div>
+      <div class="detail-note">
+        从微信对话中自动学习 · 2024-01-15 14:30
+      </div>
+    </div>
+
+    <div class="info-panel">
+      <div class="info-title">详细信息</div>
+      <div class="info-row">
+        <span class="info-key">权重</span>
+        <span class="info-val">80 / 100</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">置信度</span>
+        <span class="info-val">88%</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">来源</span>
+        <span class="info-val">📱 微信</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">可见范围</span>
+        <span class="info-val">仅小明</span>
+      </div>
+      <div class="info-row">
+        <span class="info-key">最后使用</span>
+        <span class="info-val">今天</span>
+      </div>
+    </div>
+
+    <div class="detail-actions">
+      <button class="btn btn-delete">删除</button>
+      <button class="btn btn-edit">编辑</button>
+    </div>
+  </div>
+
+  <!-- ========== 编辑页示例 ========== -->
+  <div class="demo-divider">—— 编辑页 ——</div>
+
+  <div class="page">
+    <span class="back-btn">←</span>
+    <div style="font-family: 'ZCOOL XiaoWei'; font-size: 20px; margin: 12px 0 24px;">编辑记忆</div>
+
+    <div class="form-section">
+      <label class="form-label">记忆类型</label>
+      <div class="type-selector">
+        <div class="type-btn selected">
+          <span class="icon">👤</span>
+          <span class="name">人物</span>
+        </div>
+        <div class="type-btn">
+          <span class="icon">💡</span>
+          <span class="name">偏好</span>
+        </div>
+        <div class="type-btn">
+          <span class="icon">💭</span>
+          <span class="name">情绪</span>
+        </div>
+        <div class="type-btn">
+          <span class="icon">📌</span>
+          <span class="name">约定</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <label class="form-label">内容</label>
+      <textarea class="form-textarea">用户名字/称呼是「小明」，喜欢被温柔对待</textarea>
+      <div class="char-count">16 / 500</div>
+    </div>
+
+    <div class="form-section">
+      <label class="form-label">属于哪个角色</label>
+      <div class="char-selector">
+        <div class="char-opt selected" style="--c: var(--char-1);">
+          <span class="char-opt-avatar" style="background: var(--char-1);">明</span>
+          <span>小明</span>
+        </div>
+        <div class="char-opt">
+          <span class="char-opt-avatar" style="background: var(--char-2);">红</span>
+          <span>小红</span>
+        </div>
+        <div class="char-opt">
+          <span class="char-opt-avatar" style="background: var(--char-3);">刚</span>
+          <span>小刚</span>
+        </div>
+        <div class="char-opt">
+          <span class="char-opt-avatar" style="background: var(--char-4);">🌐</span>
+          <span>所有角色</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <label class="form-label">可见范围</label>
+      <div class="visibility-selector">
+        <div class="vis-opt">
+          <div class="vis-radio"></div>
+          <div>
+            <div class="vis-title">仅当前角色可见</div>
+            <div class="vis-desc">只有「小明」能看到这条记忆</div>
+          </div>
+        </div>
+        <div class="vis-opt selected">
+          <div class="vis-radio"></div>
+          <div>
+            <div class="vis-title">所有角色可见</div>
+            <div class="vis-desc">和小明、小红、小刚都能聊到这件事</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-cancel">取消</button>
+      <button class="btn btn-save">保存</button>
+    </div>
+  </div>
+
+</body>
+</html>

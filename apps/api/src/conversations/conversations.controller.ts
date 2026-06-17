@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
+import type { Request, Response } from "express";
 import type { ConversationProfileView, ConversationView, MessageView, SendMessageResponse } from "@myphone/shared";
 import type { AuthenticatedRequest } from "../auth/auth.types.js";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
@@ -43,6 +44,56 @@ export class ConversationsController {
   ): Promise<SendMessageResponse> {
     const input = parseBody(sendMessageSchema, body);
     return this.conversations.sendMessage(this.userId(request), id, input);
+  }
+
+  @Post(":id/messages/stream")
+  async sendMessageStream(
+    @Req() request: AuthenticatedRequest & Request,
+    @Res() response: Response,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ): Promise<void> {
+    const input = parseBody(sendMessageSchema, body);
+    const userId = this.userId(request);
+
+    response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    response.setHeader("Cache-Control", "no-cache, no-transform");
+    response.setHeader("Connection", "keep-alive");
+    response.setHeader("X-Accel-Buffering", "no");
+    response.flushHeaders?.();
+
+    let aborted = false;
+    const abortController = new AbortController();
+    request.on("close", () => {
+      aborted = true;
+      abortController.abort();
+    });
+
+    try {
+      for await (const event of this.conversations.sendMessageStream(userId, id, input, {
+        signal: abortController.signal,
+      })) {
+        if (aborted) break;
+        response.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+    } catch (error) {
+      if (!aborted) {
+        const message = error instanceof Error ? error.message : "聊天流处理失败";
+        response.write(
+          `data: ${JSON.stringify({
+            type: "error",
+            data: { message, errorCode: "CHAT_STREAM_FATAL" },
+          })}\n\n`,
+        );
+      }
+    } finally {
+      if (!aborted) {
+        response.write("data: [DONE]\n\n");
+        response.end();
+      } else {
+        response.end();
+      }
+    }
   }
 
   @Post(":id/read")

@@ -44,6 +44,31 @@ export type AuthUser = {
   createdAt: string;
 };
 
+export type Gender = "male" | "female" | "other";
+
+export type MeProfileView = {
+  id: string;
+  username: string;
+  nickname: string | null;
+  avatar: string | null;
+  birthday: string | null;
+  gender: Gender | null;
+  bio: string | null;
+  region: string | null;
+  ageConfirmed: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PatchMeProfileRequest = {
+  nickname?: string | null;
+  avatar?: string | null;
+  birthday?: string | null;
+  gender?: Gender | null;
+  bio?: string | null;
+  region?: string | null;
+};
+
 export type AuthTokens = {
   accessToken: string;
   refreshToken: string;
@@ -219,6 +244,19 @@ export type SendMessageResponse = {
   relationship: RelationshipProgressView;
   newMemories: MemoryView[];
 };
+
+export type ChatStreamEvent =
+  | { type: "user_message"; data: MessageView }
+  | { type: "ai_message"; data: { message: MessageView; index: number } }
+  | {
+      type: "all_done";
+      data: {
+        conversation: ConversationView;
+        relationship: RelationshipProgressView;
+        newMemories: MemoryView[];
+      };
+    }
+  | { type: "error"; data: { message: string; errorCode?: string } };
 
 export type MemoryView = {
   id: string;
@@ -481,19 +519,23 @@ export type AgentStateView = {
 export type WechatProfileView = {
   id: string;
   userId: string;
-  displayName: string;
+  displayName: string | null;
   avatarUrl: string | null;
   wechatId: string | null;
   bio: string | null;
   region: string | null;
   walletBalanceCents: number;
   defaultMomentVisibility: "public" | "private" | "partial";
+  effectiveDisplayName: string;
+  effectiveAvatarUrl: string | null;
+  effectiveBio: string | null;
+  effectiveRegion: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type PatchWechatProfileRequest = {
-  displayName?: string;
+  displayName?: string | null;
   avatarUrl?: string | null;
   bio?: string | null;
   region?: string | null;

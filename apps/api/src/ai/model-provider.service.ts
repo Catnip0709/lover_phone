@@ -1,9 +1,19 @@
 import { Injectable } from "@nestjs/common";
 import type { ModelProvider, TestModelConfigResponse } from "@myphone/shared";
+import { parseOpenAiSseStream } from "./sse-parser.js";
 
 export type AiChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
+};
+
+export type GenerateChatStreamInput = {
+  provider: ModelProvider;
+  modelName: string;
+  apiKey: string;
+  messages: AiChatMessage[];
+  characterName: string;
+  temperature?: number;
 };
 
 @Injectable()
@@ -21,6 +31,18 @@ export class ModelProviderService {
     }
 
     return this.callChatProvider(input);
+  }
+
+  async *generateChatStream(
+    input: GenerateChatStreamInput,
+    options: { signal?: AbortSignal } = {},
+  ): AsyncIterable<string> {
+    if (process.env.LLM_MOCK_ENABLED === "true") {
+      yield* this.mockStreamReply(input.characterName, input.messages, options.signal);
+      return;
+    }
+
+    yield* this.callChatProviderStream(input, options.signal);
   }
 
   async testConnection(input: {
@@ -116,6 +138,83 @@ export class ModelProviderService {
     }
 
     return content;
+  }
+
+  private async *callChatProviderStream(
+    input: GenerateChatStreamInput,
+    externalSignal?: AbortSignal,
+  ): AsyncIterable<string> {
+    const endpoint = this.endpoint(input.provider);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(new Error("AI 回复超时")), 30_000);
+    const onExternalAbort = () => controller.abort(externalSignal?.reason);
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        controller.abort(externalSignal.reason);
+      } else {
+        externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+      }
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${input.apiKey}`,
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({
+          model: input.modelName,
+          messages: input.messages,
+          max_tokens: 420,
+          temperature: input.temperature ?? 0.86,
+          stream: true,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(`AI 回复失败：${response.status}${text ? ` ${text.slice(0, 160)}` : ""}`);
+      }
+
+      if (!response.body) {
+        throw new Error("AI 回复流为空");
+      }
+
+      let yielded = false;
+      for await (const chunk of parseOpenAiSseStream(response.body)) {
+        yielded = true;
+        yield chunk;
+      }
+
+      if (!yielded) {
+        throw new Error("AI 回复为空");
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      externalSignal?.removeEventListener("abort", onExternalAbort);
+    }
+  }
+
+  private async *mockStreamReply(
+    characterName: string,
+    messages: AiChatMessage[],
+    signal?: AbortSignal,
+  ): AsyncIterable<string> {
+    const full = this.mockReply(characterName, messages);
+    const segments = full.match(/[^。！？!?\n]+[。！？!?]?/g) ?? [full];
+    for (const segment of segments) {
+      const piece = segment.trim();
+      if (!piece) continue;
+      const tokens = piece.match(/.{1,4}/g) ?? [piece];
+      for (const token of tokens) {
+        if (signal?.aborted) return;
+        await new Promise((resolve) => setTimeout(resolve, 35));
+        yield token;
+      }
+    }
   }
 
   private mockReply(_characterName: string, messages: AiChatMessage[]): string {

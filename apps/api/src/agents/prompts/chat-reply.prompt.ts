@@ -18,6 +18,7 @@ export const chatReplyPrompt = {
       `角色卡：${context.character.rawCharacterCard ?? "无"}`,
       `你记得的长期信息：\n${context.memory.summaryText}`,
       `回复要求：${context.task.outputRequirement}`,
+      "回复节奏：模拟真实微信聊天，把回复拆成 1-5 条短消息，每条不超过 30 个字。用换行或自然标点（。！？）分隔每一条；不要写编号、不要使用 [msg] 之类的标签；遇到长想法就拆开发，遇到一句话能说清就只发一条。整段总字数不要超过 200。",
       "输出格式：只返回最终要发送的消息文本，不要 JSON，不要 Markdown，不要解释推理过程，不要写旁白或第三人称叙述。",
       context.character.adultEnabled
         ? "成人模式已开启，但必须尊重用户边界，避免露骨、胁迫、未成年人或违法内容。"

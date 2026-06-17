@@ -1,25 +1,30 @@
 import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import type { MeProfileView, PatchWechatProfileRequest, WechatProfileView } from "@myphone/shared";
-import { getMeProfile } from "@/api/users";
-import { getWechatProfile, patchWechatProfile } from "@/api/wechat";
+import type { Gender, MeProfileView, PatchMeProfileRequest } from "@myphone/shared";
+import { getMeProfile, patchMeProfile } from "@/api/users";
 import { AvatarUploader } from "@/components/AvatarUploader";
 import { useAuthStore } from "@/stores/auth-store";
 
-export default function WechatProfileEdit() {
+const GENDER_OPTIONS: { value: Gender; label: string }[] = [
+  { value: "male", label: "男" },
+  { value: "female", label: "女" },
+  { value: "other", label: "其他" },
+];
+
+export default function MeProfileEdit() {
   const { accessToken } = useAuthStore();
-  const [profile, setProfile] = useState<WechatProfileView | null>(null);
-  const [me, setMe] = useState<MeProfileView | null>(null);
+  const [profile, setProfile] = useState<MeProfileView | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [displayName, setDisplayName] = useState("");
-  const [wechatId, setWechatId] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [birthday, setBirthday] = useState("");
+  const [gender, setGender] = useState<Gender | "">("");
   const [bio, setBio] = useState("");
   const [region, setRegion] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) {
@@ -27,18 +32,15 @@ export default function WechatProfileEdit() {
       return;
     }
 
-    Promise.all([
-      getWechatProfile(accessToken),
-      getMeProfile(accessToken).catch(() => null),
-    ])
-      .then(([p, meProfile]) => {
+    getMeProfile(accessToken)
+      .then((p) => {
         setProfile(p);
-        setMe(meProfile);
-        setDisplayName(p.displayName ?? "");
-        setWechatId(p.wechatId ?? "");
+        setNickname(p.nickname ?? "");
+        setAvatar(p.avatar);
+        setBirthday(p.birthday ?? "");
+        setGender(p.gender ?? "");
         setBio(p.bio ?? "");
         setRegion(p.region ?? "");
-        setAvatarUrl(p.avatarUrl);
       })
       .catch(() => setError("加载资料失败"))
       .finally(() => setLoading(false));
@@ -54,16 +56,17 @@ export default function WechatProfileEdit() {
     setSaving(true);
     setError(null);
 
-    const input: PatchWechatProfileRequest = {
-      displayName: displayName.trim() || null,
-      wechatId: wechatId.trim() || null,
+    const body: PatchMeProfileRequest = {
+      nickname: nickname.trim() || null,
+      avatar,
+      birthday: birthday.trim() || null,
+      gender: gender || null,
       bio: bio.trim() || null,
       region: region.trim() || null,
-      avatarUrl: avatarUrl,
     };
 
     try {
-      const updated = await patchWechatProfile(accessToken, input);
+      const updated = await patchMeProfile(accessToken, body);
       setProfile(updated);
       window.history.back();
     } catch (err) {
@@ -77,11 +80,7 @@ export default function WechatProfileEdit() {
     return <Navigate to="/login" replace />;
   }
 
-  const meName = me?.nickname?.trim() || me?.username || "我";
-  const fallbackName = profile?.effectiveDisplayName ?? meName;
-  const fallbackBio = me?.bio?.trim() || "";
-  const fallbackRegion = me?.region?.trim() || "";
-  const avatarFallbackText = displayName || fallbackName;
+  const fallbackText = nickname || profile?.username || "我";
 
   return (
     <main className="relative flex h-screen min-h-0 flex-col overflow-hidden bg-[#fff4f8] text-slate-950">
@@ -92,16 +91,16 @@ export default function WechatProfileEdit() {
           <div className="flex items-center justify-between">
             <Link
               className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
-              to="/messages"
+              to="/characters"
             >
               <ArrowLeft className="h-4 w-4" />
               返回
             </Link>
-            <p className="text-base font-medium text-slate-900">编辑资料</p>
+            <p className="text-base font-medium text-slate-900">我的资料</p>
             <button
               className="flex items-center gap-1 text-sm font-medium text-emerald-600 disabled:opacity-50"
               disabled={saving}
-              form="edit-form"
+              form="me-edit-form"
               type="submit"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -117,7 +116,7 @@ export default function WechatProfileEdit() {
         ) : (
           <form
             className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-6"
-            id="edit-form"
+            id="me-edit-form"
             onSubmit={handleSubmit}
           >
             {error && (
@@ -128,48 +127,58 @@ export default function WechatProfileEdit() {
 
             <AvatarUploader
               accessToken={accessToken}
-              fallbackText={avatarFallbackText}
-              value={avatarUrl ?? profile?.effectiveAvatarUrl ?? null}
-              onChange={setAvatarUrl}
+              fallbackText={fallbackText}
+              value={avatar}
+              onChange={setAvatar}
               onError={setError}
             />
-            {!avatarUrl && profile?.effectiveAvatarUrl ? (
-              <p className="text-center text-[11px] text-slate-400">未单独设置，跟随「我」的头像</p>
-            ) : null}
+
+            <p className="text-center text-xs text-slate-400">
+              这里是各 APP 默认会读取的「我」。APP 内可以单独覆盖。
+            </p>
 
             <div className="flex flex-col gap-3 rounded-2xl border border-white/70 bg-white/54 p-4 shadow backdrop-blur-xl">
               <FieldInput
                 label="昵称"
-                value={displayName}
-                onChange={setDisplayName}
-                placeholder={`跟随「我」：${meName}`}
+                value={nickname}
+                onChange={setNickname}
+                placeholder={profile?.username ?? "输入昵称"}
                 maxLength={40}
               />
               <FieldInput
-                label="微信号"
-                value={wechatId}
-                onChange={setWechatId}
-                placeholder="设置微信号"
+                label="生日"
+                value={birthday}
+                onChange={setBirthday}
+                placeholder="例如 1995-04-12"
                 maxLength={40}
               />
+              <FieldSelect
+                label="性别"
+                value={gender}
+                onChange={(v) => setGender(v as Gender | "")}
+                options={[
+                  { value: "", label: "未设置" },
+                  ...GENDER_OPTIONS,
+                ]}
+              />
               <FieldTextarea
-                label="个性签名"
+                label="签名"
                 value={bio}
                 onChange={setBio}
-                placeholder={fallbackBio ? `跟随「我」：${fallbackBio}` : "填写个性签名"}
+                placeholder="介绍一下自己"
                 maxLength={200}
               />
               <FieldInput
                 label="地区"
                 value={region}
                 onChange={setRegion}
-                placeholder={fallbackRegion ? `跟随「我」：${fallbackRegion}` : "填写地区"}
+                placeholder="填写地区"
                 maxLength={80}
               />
             </div>
 
             <p className="px-1 text-[11px] text-slate-400">
-              留空则跟随「我」的资料。可以在联系人顶部「我」修改默认值。
+              账号：{profile?.username}
             </p>
           </form>
         )}
@@ -229,6 +238,35 @@ function FieldTextarea({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
+    </div>
+  );
+}
+
+function FieldSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <label className="w-20 shrink-0 text-sm font-medium text-slate-500">{label}</label>
+      <select
+        className="min-w-0 flex-1 rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-emerald-200"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

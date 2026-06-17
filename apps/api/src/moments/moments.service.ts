@@ -28,14 +28,13 @@ export class MomentsService {
   }
 
   async createMoment(userId: string, input: CreateMomentInput): Promise<MomentView> {
-    const profile = await this.prisma.wechatProfile.findUnique({ where: { userId } });
-    const displayName = profile?.displayName ?? "用户";
+    const author = await this.resolveAuthor(userId);
 
     const post = await this.prisma.momentPost.create({
       data: {
         userId,
-        authorName: displayName,
-        authorAvatar: profile?.avatarUrl ?? null,
+        authorName: author.name,
+        authorAvatar: author.avatar,
         content: input.content,
         imageUrls: input.imageUrls ?? [],
         location: input.location ?? null,
@@ -156,14 +155,13 @@ export class MomentsService {
     if (existingLike) {
       await this.prisma.momentLike.delete({ where: { id: existingLike.id } });
     } else {
-      const profile = await this.prisma.wechatProfile.findUnique({ where: { userId } });
-      const actorName = profile?.displayName ?? "用户";
+      const author = await this.resolveAuthor(userId);
 
       await this.prisma.momentLike.create({
         data: {
           postId,
           userId,
-          actorName,
+          actorName: author.name,
         },
       });
     }
@@ -193,14 +191,13 @@ export class MomentsService {
       throw new NotFoundException("动态不存在或无权限");
     }
 
-    const profile = await this.prisma.wechatProfile.findUnique({ where: { userId } });
-    const actorName = profile?.displayName ?? "用户";
+    const author = await this.resolveAuthor(userId);
 
     await this.prisma.momentComment.create({
       data: {
         postId,
         userId,
-        actorName,
+        actorName: author.name,
         content: input.content,
       },
     });
@@ -253,6 +250,21 @@ export class MomentsService {
     }
 
     return this.toView(updated);
+  }
+
+  private async resolveAuthor(userId: string): Promise<{ name: string; avatar: string | null }> {
+    const [profile, user] = await Promise.all([
+      this.prisma.wechatProfile.findUnique({ where: { userId } }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true, nickname: true, avatar: true },
+      }),
+    ]);
+
+    const fallbackName = user?.nickname?.trim() || user?.username || "用户";
+    const name = profile?.displayName?.trim() || fallbackName;
+    const avatar = profile?.avatarUrl ?? user?.avatar ?? null;
+    return { name, avatar };
   }
 
   private toView(

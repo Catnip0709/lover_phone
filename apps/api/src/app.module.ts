@@ -16,6 +16,8 @@ import { HealthService } from "./health/health.service.js";
 import { ModelConfigsController } from "./model-configs/model-configs.controller.js";
 import { ModelConfigsService } from "./model-configs/model-configs.service.js";
 import { MomentsModule } from "./moments/moments.module.js";
+import { UploadsController } from "./uploads/uploads.controller.js";
+import { UploadsService } from "./uploads/uploads.service.js";
 import { UsersController } from "./users/users.controller.js";
 import { UsersService } from "./users/users.service.js";
 import { SharedModule } from "./shared/shared.module.js";
@@ -30,6 +32,7 @@ import { WechatModule } from "./wechat/wechat.module.js";
     ConversationsController,
     HealthController,
     ModelConfigsController,
+    UploadsController,
     UsersController,
   ],
   providers: [
@@ -42,6 +45,7 @@ import { WechatModule } from "./wechat/wechat.module.js";
     ModelConfigsService,
     ModelProviderService,
     PasswordService,
+    UploadsService,
     UsersService,
   ],
 })

@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type {
+  ChatStreamEvent,
   ConversationProfileView,
   ConversationView,
   MemoryView,
@@ -305,6 +306,246 @@ export class ConversationsService {
       }
 
       throw error;
+    }
+  }
+
+  async *sendMessageStream(
+    userId: string,
+    conversationId: string,
+    input: Omit<SendMessageDto, "type"> & { type?: string },
+    options: { signal?: AbortSignal } = {},
+  ): AsyncIterable<ChatStreamEvent> {
+    const messageType = input.type || "text";
+    const agentReadableContent = this.buildAgentReadableContent({
+      type: messageType,
+      content: input.content,
+      payload: input.payload,
+    });
+
+    if (agentReadableContent) {
+      this.agentPolicy.assertInputAllowed({ content: agentReadableContent, app: "wechat" });
+    }
+
+    const conversation = await this.getOwnedConversation(userId, conversationId);
+    const defaultModel = await this.getDefaultModel(userId);
+    const [recentMessages, memories] = await Promise.all([
+      this.getRecentMessages(userId, conversationId),
+      this.agentMemory.retrieveForChat({
+        userId,
+        characterId: conversation.characterId,
+        limit: 8,
+      }),
+    ]);
+
+    const relationshipBefore = this.getRelationshipProgress(conversation.character.structuredProfile);
+    const nextRelationship = this.advanceRelationship(relationshipBefore, agentReadableContent);
+
+    const userMessage = await this.prisma.message.create({
+      data: {
+        userId,
+        conversationId,
+        characterId: conversation.characterId,
+        sender: "user",
+        type: messageType as MessageType,
+        content: input.content || null,
+        payload: input.payload ? JSON.parse(JSON.stringify(input.payload)) : { source: "user_input" },
+      },
+    });
+
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        unreadCount: 0,
+        lastMessagePreview: agentReadableContent || this.getPreviewForMessageType(messageType),
+        lastMessageAt: userMessage.createdAt,
+      },
+    });
+
+    yield { type: "user_message", data: toMessageView(userMessage) };
+
+    const agentRun = await this.createWechatAgentRun({
+      userId,
+      characterId: conversation.characterId,
+      conversationId,
+      userMessageId: userMessage.id,
+      content: agentReadableContent,
+      occurredAt: userMessage.createdAt,
+    });
+
+    const newMemories = await this.agentMemory.captureFromWechatMessage({
+      userId,
+      characterId: conversation.characterId,
+      sourceEventId: agentRun?.eventId ?? null,
+      sourceMessageId: userMessage.id,
+      content: agentReadableContent,
+    });
+
+    await this.updateRelationshipProfile(conversation.characterId, conversation.character.structuredProfile, nextRelationship);
+    await this.redis.del(this.profileCacheKey(userId, conversationId)).catch(() => undefined);
+    await this.redis.del(this.contextCacheKey(userId, conversationId)).catch(() => undefined);
+
+    const freshRecentMessages = [...recentMessages, userMessage];
+
+    const queue: ChatStreamEvent[] = [];
+    type Resolver = () => void;
+    const waiter: { resolve: Resolver | null } = { resolve: null };
+    let finished = false;
+    const pushEvent = (event: ChatStreamEvent) => {
+      queue.push(event);
+      const resolver = waiter.resolve;
+      waiter.resolve = null;
+      if (resolver) resolver();
+    };
+
+    const aiMessages: MessageView[] = [];
+    let runtimeAiRequestId: string | null = null;
+    let runtimeStartedAt = Date.now();
+
+    const runtimeTask = (async () => {
+      try {
+        const result = await this.agentRuntime.handleWechatUserMessageStream(
+          {
+            userId,
+            conversationId,
+            characterId: conversation.characterId,
+            agentRun,
+            model: defaultModel,
+            character: conversation.character,
+            recentMessages: freshRecentMessages,
+            currentUserMessage: agentReadableContent,
+            memories: this.uniqueMemories(memories.concat(newMemories)),
+            relationship: nextRelationship,
+          },
+          async (sentence, index, ctx) => {
+            runtimeAiRequestId = ctx.aiRequestId;
+            runtimeStartedAt = ctx.startedAt;
+            const message = await this.agentActionExecutor.appendWechatStreamSentence({
+              userId,
+              characterId: conversation.characterId,
+              conversationId,
+              sentence,
+              isFirst: index === 0,
+              metadata: {
+                provider: defaultModel.provider,
+                modelName: defaultModel.modelName,
+                relationship: nextRelationship,
+                aiRequestId: ctx.aiRequestId,
+              },
+            });
+            const view = toMessageView(message as Parameters<typeof toMessageView>[0]);
+            aiMessages.push(view);
+            pushEvent({ type: "ai_message", data: { message: view, index } });
+          },
+          { signal: options.signal },
+        );
+        runtimeAiRequestId = result.aiRequestId;
+        runtimeStartedAt = result.startedAt;
+
+        const updatedConversation = await this.agentActionExecutor.finalizeWechatStream({
+          userId,
+          conversationId,
+          aiRequestId: result.aiRequestId,
+          startedAt: result.startedAt,
+        });
+
+        if (agentRun) {
+          await this.agentHarness
+            .markRunSucceeded({
+              runId: agentRun.runId,
+              provider: defaultModel.provider,
+              modelName: defaultModel.modelName,
+              outputSummary: result.fullText,
+              actions: aiMessages.map((message) => ({
+                type: "wechat.send_message" as const,
+                conversationId,
+                content: message.content ?? "",
+                metadata: { messageId: message.id, aiRequestId: result.aiRequestId },
+              })),
+              latencyMs: Date.now() - result.startedAt,
+            })
+            .catch(() => undefined);
+        }
+
+        await this.redis.del(this.profileCacheKey(userId, conversationId)).catch(() => undefined);
+        await this.cacheRecentMessages(
+          userId,
+          conversationId,
+          freshRecentMessages.concat(
+            aiMessages.map((message) => ({ sender: message.sender, content: message.content })),
+          ),
+        );
+
+        pushEvent({
+          type: "all_done",
+          data: {
+            conversation: toConversationView(updatedConversation),
+            relationship: nextRelationship,
+            newMemories,
+          },
+        });
+      } catch (error) {
+        if (runtimeAiRequestId) {
+          await this.prisma.aiRequest
+            .update({
+              where: { id: runtimeAiRequestId },
+              data: {
+                status: "failed",
+                latencyMs: Date.now() - runtimeStartedAt,
+                errorCode: "AI_REPLY_STREAM_FAILED",
+                errorMessage: error instanceof Error ? error.message : "AI 流式回复失败",
+              },
+            })
+            .catch(() => undefined);
+        }
+
+        if (agentRun) {
+          await this.agentHarness
+            .markRunFailed({
+              runId: agentRun.runId,
+              provider: defaultModel.provider,
+              modelName: defaultModel.modelName,
+              error,
+              latencyMs: Date.now() - runtimeStartedAt,
+            })
+            .catch(() => undefined);
+        }
+
+        pushEvent({
+          type: "error",
+          data: {
+            message: error instanceof Error ? error.message : "AI 流式回复失败",
+            errorCode: "AI_REPLY_STREAM_FAILED",
+          },
+        });
+      } finally {
+        finished = true;
+        const resolver = waiter.resolve;
+        waiter.resolve = null;
+        if (resolver) resolver();
+      }
+    })();
+
+    try {
+      while (true) {
+        if (queue.length > 0) {
+          const event = queue.shift()!;
+          yield event;
+          if (event.type === "all_done" || event.type === "error") {
+            await runtimeTask;
+            return;
+          }
+          continue;
+        }
+        if (finished) {
+          await runtimeTask;
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          waiter.resolve = resolve;
+        });
+      }
+    } finally {
+      await runtimeTask.catch(() => undefined);
     }
   }
 

@@ -440,7 +440,7 @@ export class WechatWalletService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { nickname: true, username: true },
+      select: { id: true },
     });
 
     if (!user) {
@@ -450,7 +450,7 @@ export class WechatWalletService {
     return this.prisma.wechatProfile.create({
       data: {
         userId,
-        displayName: user.nickname ?? user.username,
+        displayName: null,
         avatarUrl: null,
         wechatId: null,
         bio: null,

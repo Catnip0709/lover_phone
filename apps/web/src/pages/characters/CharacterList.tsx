@@ -1,8 +1,9 @@
 import { ArrowLeft, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import type { CharacterView } from "@myphone/shared";
+import type { CharacterView, MeProfileView } from "@myphone/shared";
 import { listCharacters } from "@/api/characters";
+import { getMeProfile, resolveAssetUrl } from "@/api/users";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -10,6 +11,7 @@ export default function CharacterList() {
   const navigate = useNavigate();
   const { accessToken } = useAuthStore();
   const [characters, setCharacters] = useState<CharacterView[]>([]);
+  const [me, setMe] = useState<MeProfileView | null>(null);
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,8 +21,11 @@ export default function CharacterList() {
       return;
     }
 
-    listCharacters(accessToken)
-      .then(setCharacters)
+    Promise.all([listCharacters(accessToken), getMeProfile(accessToken).catch(() => null)])
+      .then(([list, meProfile]) => {
+        setCharacters(list);
+        setMe(meProfile);
+      })
       .catch((requestError) =>
         setError(requestError instanceof Error ? requestError.message : "加载联系人失败"),
       )
@@ -39,6 +44,9 @@ export default function CharacterList() {
   if (!accessToken) {
     return <Navigate to="/login" replace />;
   }
+
+  const meName = me?.nickname?.trim() || me?.username || "我";
+  const meAvatarUrl = resolveAssetUrl(me?.avatar ?? null);
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#fff4f8] text-slate-950">
@@ -71,6 +79,35 @@ export default function CharacterList() {
           </header>
 
           <section className="min-h-[calc(100vh-105px)] bg-white/20">
+            <button
+              className="flex w-full items-center gap-3 border-b border-slate-200/65 bg-white/40 px-5 py-4 text-left transition hover:bg-white/65"
+              onClick={() => navigate("/me/profile")}
+              type="button"
+            >
+              {meAvatarUrl ? (
+                <img
+                  alt={meName}
+                  className="h-12 w-12 rounded-[18px] object-cover shadow-[0_4px_12px_rgba(148,163,184,0.18)]"
+                  src={meAvatarUrl}
+                />
+              ) : (
+                <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-[linear-gradient(145deg,#dbeafe,#93c5fd)] text-lg font-semibold text-white shadow-[0_4px_12px_rgba(148,163,184,0.18)]">
+                  {meName[0]}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-[15px] font-medium text-slate-900">{meName}</p>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                    我
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-400">
+                  {me?.bio?.trim() || "设置昵称、生日等，APP 会默认读取这里"}
+                </p>
+              </div>
+            </button>
+
             {loading ? (
               <div className="px-5 py-6 text-sm text-slate-400">正在同步...</div>
             ) : error ? (
