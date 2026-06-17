@@ -1,9 +1,9 @@
-import { ArrowLeft, Pencil, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, PauseCircle, Pencil, PlayCircle, SlidersHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import type { CharacterView } from "@myphone/shared";
-import { getCharacter } from "@/api/characters";
+import { getCharacter, updateCharacterStatus } from "@/api/characters";
 import { CharacterAvatar } from "@/components/CharacterAvatar";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -12,6 +12,7 @@ export default function CharacterDetail() {
   const { accessToken } = useAuthStore();
   const [character, setCharacter] = useState<CharacterView | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,6 +33,23 @@ export default function CharacterDetail() {
   }
 
   const profile = character?.structuredProfile ?? {};
+
+  async function handleToggleActive() {
+    if (!accessToken || !character || updatingStatus) {
+      return;
+    }
+
+    setUpdatingStatus(true);
+    setError(null);
+    try {
+      const nextCharacter = await updateCharacterStatus(accessToken, character.id, !character.isActive);
+      setCharacter(nextCharacter);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "更新角色状态失败");
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#fff4f8] text-slate-950">
@@ -70,9 +88,41 @@ export default function CharacterDetail() {
                   structuredProfile={character.structuredProfile}
                 />
                 <h1 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-slate-950">{character.name}</h1>
+                <span
+                  className={`mt-3 rounded-full px-3 py-1 text-xs font-medium ${
+                    character.isActive
+                      ? "bg-emerald-50 text-emerald-600"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {character.isActive ? "启用中" : "已停用"}
+                </span>
               </div>
 
               <div className="mt-7 space-y-4">
+                <section className="rounded-[28px] border border-white/75 bg-white/64 p-4 shadow-[0_12px_32px_rgba(148,163,184,0.14)] backdrop-blur-2xl">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-slate-800">角色主动行为</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        停用后暂停发朋友圈、回复朋友圈、主动问候和未来所有主动行为；用户主动聊天不受影响。
+                      </p>
+                    </div>
+                    <button
+                      className={`flex h-11 shrink-0 items-center gap-1.5 rounded-2xl px-3 text-xs font-semibold text-white shadow-lg transition hover:-translate-y-0.5 disabled:opacity-50 ${
+                        character.isActive
+                          ? "bg-[linear-gradient(135deg,#94a3b8,#64748b)] shadow-slate-400/20"
+                          : "bg-[linear-gradient(135deg,#f9a8d4,#7dd3fc)] shadow-sky-300/25"
+                      }`}
+                      disabled={updatingStatus}
+                      onClick={() => void handleToggleActive()}
+                      type="button"
+                    >
+                      {character.isActive ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
+                      {character.isActive ? "停用" : "启用"}
+                    </button>
+                  </div>
+                </section>
                 <InfoBlock label="故事背景" value={stringValue(profile.storyBackground) || "未填写"} />
                 <InfoBlock label="对你的称呼" value={stringValue(profile.userAddressing) || "未填写"} />
                 <InfoBlock

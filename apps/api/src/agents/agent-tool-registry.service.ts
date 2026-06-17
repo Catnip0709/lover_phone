@@ -63,6 +63,42 @@ export class AgentToolRegistryService {
       allowedTasks: ["chat.reply", "relationship.advance"],
     });
     this.register({
+      name: "wechatMomentsLike",
+      description: "Let a character like a user-owned WeChat moment.",
+      provider: "internal",
+      riskLevel: "low",
+      readOnly: false,
+      destructive: false,
+      requiresUserConsent: false,
+      timeoutMs: 5_000,
+      allowedApps: ["wechat"],
+      allowedTasks: ["moments.comment"],
+    });
+    this.register({
+      name: "wechatMomentsComment",
+      description: "Let a character comment on a user-owned WeChat moment.",
+      provider: "internal",
+      riskLevel: "low",
+      readOnly: false,
+      destructive: false,
+      requiresUserConsent: false,
+      timeoutMs: 5_000,
+      allowedApps: ["wechat"],
+      allowedTasks: ["moments.comment"],
+    });
+    this.register({
+      name: "wechatMomentsCreatePost",
+      description: "Let a character create a public WeChat moment.",
+      provider: "internal",
+      riskLevel: "low",
+      readOnly: false,
+      destructive: false,
+      requiresUserConsent: false,
+      timeoutMs: 5_000,
+      allowedApps: ["wechat"],
+      allowedTasks: ["moments.post"],
+    });
+    this.register({
       name: "mock.weather.get_current",
       description: "Mock MCP weather lookup for validating MCP client plumbing.",
       provider: "mcp",

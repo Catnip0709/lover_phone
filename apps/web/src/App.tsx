@@ -9,7 +9,9 @@ import ImportCharacter from "@/pages/characters/ImportCharacter";
 import NewCharacter from "@/pages/characters/NewCharacter";
 import LegalPage from "@/pages/legal/LegalPage";
 import ConversationDetail from "@/pages/messages/ConversationDetail";
-import ConversationList from "@/pages/messages/ConversationList";
+import WechatProfileEdit from "@/pages/wechat/WechatProfileEdit";
+import WechatShell from "@/pages/wechat/WechatShell";
+import WechatMomentNew from "@/pages/wechat/WechatMomentNew";
 import ModelSettings from "@/pages/settings/ModelSettings";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -53,7 +55,15 @@ export default function App() {
           path="/characters/import"
           element={user ? <ImportCharacter /> : <Navigate to="/login" replace />}
         />
-        <Route path="/messages" element={user ? <ConversationList /> : <Navigate to="/login" replace />} />
+        <Route path="/messages" element={user ? <WechatShell /> : <Navigate to="/login" replace />} />
+        <Route
+          path="/messages/me/edit"
+          element={user ? <WechatProfileEdit /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/messages/moments/new"
+          element={user ? <WechatMomentNew /> : <Navigate to="/login" replace />}
+        />
         <Route
           path="/messages/:id"
           element={user ? <ConversationDetail /> : <Navigate to="/login" replace />}

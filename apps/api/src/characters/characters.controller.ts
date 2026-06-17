@@ -4,7 +4,7 @@ import type { AuthenticatedRequest } from "../auth/auth.types.js";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
 import { parseBody } from "../common/zod.js";
 import { CharactersService } from "./characters.service.js";
-import { createCharacterSchema, importCharacterCardSchema, updateCharacterSchema } from "./characters.schemas.js";
+import { createCharacterSchema, importCharacterCardSchema, updateCharacterSchema, updateCharacterStatusSchema } from "./characters.schemas.js";
 
 @Controller("characters")
 @UseGuards(JwtAuthGuard)
@@ -41,6 +41,16 @@ export class CharactersController {
   ): Promise<CharacterView> {
     const input = parseBody(updateCharacterSchema, body);
     return this.characters.update(this.userId(request), characterId, input);
+  }
+
+  @Patch(":id/status")
+  updateStatus(
+    @Req() request: AuthenticatedRequest,
+    @Param("id") characterId: string,
+    @Body() body: unknown,
+  ): Promise<CharacterView> {
+    const input = parseBody(updateCharacterStatusSchema, body);
+    return this.characters.updateStatus(this.userId(request), characterId, input.isActive);
   }
 
   private userId(request: AuthenticatedRequest): string {

@@ -72,6 +72,7 @@ export class CharactersService {
           adultEnabled: normalizedInput.adultEnabled,
           adultIntensity: normalizedInput.adultIntensity,
           proactiveFrequency: normalizedInput.proactiveFrequency,
+          isActive: normalizedInput.isActive,
           riskLevel: safety.level,
         },
       });
@@ -147,6 +148,7 @@ export class CharactersService {
       adultEnabled: input.adultEnabled ?? existing.adultEnabled,
       adultIntensity: input.adultIntensity ?? (existing.adultIntensity as CreateCharacterDto["adultIntensity"]),
       proactiveFrequency: input.proactiveFrequency ?? (existing.proactiveFrequency as CreateCharacterDto["proactiveFrequency"]),
+      isActive: input.isActive ?? existing.isActive,
     });
     const safety = this.agentPolicy.evaluateCharacterCard({
       content: this.safetyText(normalizedInput),
@@ -181,8 +183,33 @@ export class CharactersService {
         adultEnabled: normalizedInput.adultEnabled,
         adultIntensity: normalizedInput.adultIntensity,
         proactiveFrequency: normalizedInput.proactiveFrequency,
+        isActive: normalizedInput.isActive,
         riskLevel: safety.level,
       },
+      include: { conversation: { select: { id: true } } },
+    });
+
+    if (existing.conversation?.id) {
+      await this.redis.del(`conversation-profile:${userId}:${existing.conversation.id}`).catch(() => undefined);
+      await this.redis.del(`conversation-context:${userId}:${existing.conversation.id}`).catch(() => undefined);
+    }
+
+    return toCharacterView(updated);
+  }
+
+  async updateStatus(userId: string, characterId: string, isActive: boolean): Promise<CharacterView> {
+    const existing = await this.prisma.character.findFirst({
+      where: { id: characterId, userId, deletedAt: null },
+      include: { conversation: { select: { id: true } } },
+    });
+
+    if (!existing) {
+      throw new NotFoundException("联系人不存在");
+    }
+
+    const updated = await this.prisma.character.update({
+      where: { id: characterId },
+      data: { isActive },
       include: { conversation: { select: { id: true } } },
     });
 
@@ -214,8 +241,8 @@ export class CharactersService {
     };
   }
 
-  private normalizeCreateInput(input: CreateCharacterDto): Required<Pick<CreateCharacterDto, "name" | "nickname" | "age" | "avatarPreset" | "relationshipStage" | "adultEnabled" | "adultIntensity" | "proactiveFrequency" | "rawCharacterCard">> &
-    Omit<CreateCharacterDto, "name" | "nickname" | "age" | "avatarPreset" | "relationshipStage" | "adultEnabled" | "adultIntensity" | "proactiveFrequency" | "rawCharacterCard"> {
+  private normalizeCreateInput(input: CreateCharacterDto): Required<Pick<CreateCharacterDto, "name" | "nickname" | "age" | "avatarPreset" | "relationshipStage" | "adultEnabled" | "adultIntensity" | "proactiveFrequency" | "isActive" | "rawCharacterCard">> &
+    Omit<CreateCharacterDto, "name" | "nickname" | "age" | "avatarPreset" | "relationshipStage" | "adultEnabled" | "adultIntensity" | "proactiveFrequency" | "isActive" | "rawCharacterCard"> {
     const storyBackground = input.storyBackground?.trim();
     const rawCharacterCard = input.rawCharacterCard?.trim() || storyBackground || `${input.name} 是一个等待补充设定的 AI 角色。`;
 
@@ -229,6 +256,7 @@ export class CharactersService {
       adultEnabled: input.adultEnabled ?? false,
       adultIntensity: input.adultIntensity ?? "light",
       proactiveFrequency: input.proactiveFrequency ?? "medium",
+      isActive: input.isActive ?? true,
       rawCharacterCard,
       temperature: this.clampTemperature(input.temperature),
     };
@@ -251,6 +279,7 @@ export class CharactersService {
       adultEnabled: input.adultEnabled,
       adultIntensity: input.adultIntensity,
       proactiveFrequency: input.proactiveFrequency,
+      isActive: input.isActive,
       tags: this.extractTags(input.rawCharacterCard),
       safetyAccepted: Boolean(input.safetyAccepted),
     };

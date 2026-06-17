@@ -46,6 +46,80 @@ export type WechatChatAgentContext = {
   snapshot: Prisma.InputJsonObject;
 };
 
+export type WechatMomentsAgentContext = {
+  system: {
+    product: "myphone";
+    safetyMode: "relationship_companion";
+  };
+  character: {
+    nickname: string;
+    age: number;
+    occupation: string | null;
+    rawCharacterCard: string | null;
+    storyBackground: string | null;
+    userAddressing: string | null;
+    adultEnabled: boolean;
+  };
+  app: {
+    app: "wechat";
+    visibility: Extract<AgentVisibility, "public">;
+  };
+  memory: {
+    items: MemoryView[];
+    summaryText: string;
+  };
+  relationship: RelationshipProgressView;
+  task: {
+    type: "moments.comment";
+    momentContent: string;
+    momentLocation: string | null;
+    momentImageCount: number;
+    outputRequirement: string;
+  };
+  runtime: {
+    temperature: number;
+    contextBudget: {
+      memoryLimit: number;
+    };
+  };
+  snapshot: Prisma.InputJsonObject;
+};
+
+export type WechatMomentsPostAgentContext = {
+  system: {
+    product: "myphone";
+    safetyMode: "relationship_companion";
+  };
+  character: {
+    nickname: string;
+    age: number;
+    occupation: string | null;
+    rawCharacterCard: string | null;
+    storyBackground: string | null;
+    adultEnabled: boolean;
+  };
+  app: {
+    app: "wechat";
+    visibility: Extract<AgentVisibility, "public">;
+  };
+  memory: {
+    items: MemoryView[];
+    summaryText: string;
+  };
+  relationship: RelationshipProgressView;
+  task: {
+    type: "moments.post";
+    outputRequirement: string;
+  };
+  runtime: {
+    temperature: number;
+    contextBudget: {
+      memoryLimit: number;
+    };
+  };
+  snapshot: Prisma.InputJsonObject;
+};
+
 @Injectable()
 export class AgentContextService {
   buildWechatChatContext(input: {
@@ -142,6 +216,168 @@ export class AgentContextService {
           contextBudget: {
             recentMessageLimit: 12,
             memoryLimit: 8,
+          },
+        },
+      },
+    };
+  }
+
+  buildWechatMomentsContext(input: {
+    character: {
+      nickname: string;
+      age: number;
+      occupation: string | null;
+      rawCharacterCard: string | null;
+      adultEnabled: boolean;
+      structuredProfile: unknown;
+    };
+    memories: MemoryView[];
+    relationship: RelationshipProgressView;
+    momentContent: string;
+    momentLocation: string | null;
+    momentImageCount: number;
+  }): WechatMomentsAgentContext {
+    const profile = this.normalizeProfile(input.character.structuredProfile);
+    const storyBackground = typeof profile.storyBackground === "string" ? profile.storyBackground : null;
+    const userAddressing = typeof profile.userAddressing === "string" ? profile.userAddressing : null;
+    const memories = input.memories.slice(0, 6);
+    const memoryText =
+      memories.length > 0
+        ? memories.map((memory) => `- [${memory.type}/权重${memory.weight}] ${memory.content}`).join("\n")
+        : "- 暂无相关记忆";
+
+    return {
+      system: {
+        product: "myphone",
+        safetyMode: "relationship_companion",
+      },
+      character: {
+        nickname: input.character.nickname,
+        age: input.character.age,
+        occupation: input.character.occupation,
+        rawCharacterCard: input.character.rawCharacterCard,
+        storyBackground,
+        userAddressing,
+        adultEnabled: input.character.adultEnabled,
+      },
+      app: {
+        app: "wechat",
+        visibility: "public",
+      },
+      memory: {
+        items: memories,
+        summaryText: memoryText,
+      },
+      relationship: input.relationship,
+      task: {
+        type: "moments.comment",
+        momentContent: input.momentContent,
+        momentLocation: input.momentLocation,
+        momentImageCount: input.momentImageCount,
+        outputRequirement:
+          "你正在决定是否给用户的这条朋友圈点赞或评论。朋友圈是半公开场景，你的评论会显示在公开动态下方。要求：1）判断是否点赞和/或评论；2）评论内容必须自然、符合人设、不泄露私聊信息；3）长度控制在50字以内；4）输出JSON格式：{\"like\": true/false, \"comment\": \"评论内容或null\"}",
+      },
+      runtime: {
+        temperature: this.getModelTemperature(profile),
+        contextBudget: {
+          memoryLimit: 6,
+        },
+      },
+      snapshot: {
+        app: "wechat",
+        visibility: "public",
+        taskType: "moments.comment",
+        character: {
+          nickname: input.character.nickname,
+          hasStoryBackground: Boolean(storyBackground),
+          adultEnabled: input.character.adultEnabled,
+        },
+        relationship: input.relationship,
+        memory: {
+          count: memories.length,
+          ids: memories.map((memory) => memory.id),
+        },
+        runtime: {
+          temperature: this.getModelTemperature(profile),
+          contextBudget: {
+            memoryLimit: 6,
+          },
+        },
+      },
+    };
+  }
+
+  buildWechatMomentsPostContext(input: {
+    character: {
+      nickname: string;
+      age: number;
+      occupation: string | null;
+      rawCharacterCard: string | null;
+      adultEnabled: boolean;
+      structuredProfile: unknown;
+    };
+    memories: MemoryView[];
+    relationship: RelationshipProgressView;
+  }): WechatMomentsPostAgentContext {
+    const profile = this.normalizeProfile(input.character.structuredProfile);
+    const storyBackground = typeof profile.storyBackground === "string" ? profile.storyBackground : null;
+    const memories = input.memories.slice(0, 6);
+    const memoryText =
+      memories.length > 0
+        ? memories.map((memory) => `- [${memory.type}/权重${memory.weight}] ${memory.content}`).join("\n")
+        : "- 暂无相关记忆";
+
+    return {
+      system: {
+        product: "myphone",
+        safetyMode: "relationship_companion",
+      },
+      character: {
+        nickname: input.character.nickname,
+        age: input.character.age,
+        occupation: input.character.occupation,
+        rawCharacterCard: input.character.rawCharacterCard,
+        storyBackground,
+        adultEnabled: input.character.adultEnabled,
+      },
+      app: {
+        app: "wechat",
+        visibility: "public",
+      },
+      memory: {
+        items: memories,
+        summaryText: memoryText,
+      },
+      relationship: input.relationship,
+      task: {
+        type: "moments.post",
+        outputRequirement:
+          "你正在考虑是否发布一条朋友圈动态。要求：1）判断是否发布（可以选择不发）；2）如果发布，内容必须自然、符合人设、不提及自己是AI；3）可以包含心情、日常、想法等；4）输出JSON格式：{\"post\": true/false, \"content\": \"朋友圈内容或null\", \"location\": \"可选位置或null\"}",
+      },
+      runtime: {
+        temperature: this.getModelTemperature(profile),
+        contextBudget: {
+          memoryLimit: 6,
+        },
+      },
+      snapshot: {
+        app: "wechat",
+        visibility: "public",
+        taskType: "moments.post",
+        character: {
+          nickname: input.character.nickname,
+          hasStoryBackground: Boolean(storyBackground),
+          adultEnabled: input.character.adultEnabled,
+        },
+        relationship: input.relationship,
+        memory: {
+          count: memories.length,
+          ids: memories.map((memory) => memory.id),
+        },
+        runtime: {
+          temperature: this.getModelTemperature(profile),
+          contextBudget: {
+            memoryLimit: 6,
           },
         },
       },

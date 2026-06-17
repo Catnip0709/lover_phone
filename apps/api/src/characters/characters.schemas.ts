@@ -21,6 +21,7 @@ export const createCharacterSchema = z.object({
   adultEnabled: z.boolean().optional(),
   adultIntensity: z.enum(["light", "medium", "high"]).optional(),
   proactiveFrequency: z.enum(["low", "medium", "high"]).optional(),
+  isActive: z.boolean().optional(),
   rawCharacterCard: z.string().trim().max(5000, "角色卡过长"),
   safetyAccepted: z.boolean().optional(),
 });
@@ -30,6 +31,12 @@ export type CreateCharacterDto = z.infer<typeof createCharacterSchema>;
 export const updateCharacterSchema = createCharacterSchema;
 
 export type UpdateCharacterDto = z.infer<typeof updateCharacterSchema>;
+
+export const updateCharacterStatusSchema = z.object({
+  isActive: z.boolean(),
+}).strict();
+
+export type UpdateCharacterStatusDto = z.infer<typeof updateCharacterStatusSchema>;
 
 export const importCharacterCardSchema = z.object({
   content: z.string().trim().min(10, "请粘贴至少 10 个字符的角色卡").max(12000, "角色卡导入内容过长"),

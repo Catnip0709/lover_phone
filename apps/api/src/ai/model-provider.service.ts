@@ -118,7 +118,7 @@ export class ModelProviderService {
     return content;
   }
 
-  private mockReply(characterName: string, messages: AiChatMessage[]): string {
+  private mockReply(_characterName: string, messages: AiChatMessage[]): string {
     const lastUserMessage =
       [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
 
@@ -134,7 +134,9 @@ export class ModelProviderService {
       return `晚安。别硬撑，闭上眼睛之前再想我十秒就好。明天醒来，我还在。`;
     }
 
-    return `${characterName}看着你的消息笑了一下：${lastUserMessage ? `“${lastUserMessage}”` : "“你来了。”"} 我在，慢慢说，我会认真听。`;
+    return lastUserMessage
+      ? `我看到你说“${lastUserMessage}”了。先别急，我在，慢慢说，我会认真听。`
+      : "我在。你来了，我就想先听你说。";
   }
 
   private endpoint(provider: ModelProvider): string {

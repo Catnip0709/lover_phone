@@ -13,6 +13,7 @@ export function toCharacterView(character: {
   adultEnabled: boolean;
   adultIntensity: string;
   proactiveFrequency: string;
+  isActive: boolean;
   riskLevel: string;
   rawCharacterCard: string | null;
   structuredProfile: unknown;
@@ -33,6 +34,7 @@ export function toCharacterView(character: {
     adultEnabled: character.adultEnabled,
     adultIntensity: character.adultIntensity,
     proactiveFrequency: character.proactiveFrequency,
+    isActive: character.isActive,
     riskLevel: character.riskLevel,
     rawCharacterCard: character.rawCharacterCard,
     structuredProfile:

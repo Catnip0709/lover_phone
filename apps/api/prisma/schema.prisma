@@ -22,11 +22,14 @@ enum MessageSender {
 enum MessageType {
   text
   voice
+  image
   sticker
   quote
   red_packet
   transfer
   location
+  official_account_article
+  moment_share
   video
   system_hint
 }
@@ -54,6 +57,11 @@ model User {
   agentMemories  AgentMemory[]
   aiRequests     AiRequest[]
   events         AnalyticsEvent[]
+  wechatProfile  WechatProfile?
+  moments        MomentPost[]
+  momentLikes    MomentLike[]
+  momentComments MomentComment[]
+  walletTransactions WechatWalletTransaction[]
 }
 
 model ModelConfig {
@@ -93,6 +101,7 @@ model Character {
   adultIntensity     String    @default("light") @db.VarChar(20)
   proactiveFrequency String    @default("medium") @db.VarChar(20)
   lastProactiveAt    DateTime?
+  isActive           Boolean   @default(true)
   riskLevel          String    @default("none") @db.VarChar(20)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -108,6 +117,8 @@ model Character {
   agentStates    AgentState[]
   agentMemories  AgentMemory[]
   aiRequests     AiRequest[]
+  moments        MomentPost[]
+  walletTransactions WechatWalletTransaction[]
 
   @@index([userId, deletedAt])
 }
@@ -151,6 +162,7 @@ model Message {
   conversation Conversation @relation(fields: [conversationId], references: [id])
   character    Character    @relation(fields: [characterId], references: [id])
   aiRequest    AiRequest?   @relation(fields: [aiRequestId], references: [id])
+  walletTransaction WechatWalletTransaction?
 
   @@index([conversationId, createdAt])
   @@index([userId, characterId, createdAt])
@@ -322,6 +334,97 @@ model AgentMemory {
   @@index([characterId, enabled, weight])
   @@index([userId, characterId, type])
   @@index([sourceEventId])
+}
+
+model WechatProfile {
+  id                       String   @id @default(uuid())
+  userId                   String   @unique
+  displayName              String   @db.VarChar(40)
+  avatarUrl                String?
+  wechatId                 String?  @db.VarChar(40)
+  bio                      String?  @db.VarChar(160)
+  region                   String?  @db.VarChar(80)
+  walletBalanceCents       Int      @default(0)
+  defaultMomentVisibility   String   @db.VarChar(20) @default("public")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model WechatWalletTransaction {
+  id            String   @id @default(uuid())
+  userId        String
+  type          String   @db.VarChar(20)
+  amountCents   Int
+  direction     String   @db.VarChar(10)
+  messageId     String?  @unique
+  characterId   String?
+  remark        String?  @db.VarChar(140)
+  status        String   @db.VarChar(20) @default("completed")
+  createdAt     DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id])
+  message   Message?   @relation(fields: [messageId], references: [id])
+  character Character? @relation(fields: [characterId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model MomentPost {
+  id             String   @id @default(uuid())
+  userId         String
+  characterId    String?
+  authorType     String   @db.VarChar(20) @default("user")
+  authorName     String   @db.VarChar(80)
+  authorAvatar   String?
+  content        String   @db.VarChar(2000)
+  imageUrls      Json
+  location       String?  @db.VarChar(80)
+  visibility     String   @db.VarChar(20) @default("public")
+  likesCount     Int      @default(0)
+  commentsCount  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user       User           @relation(fields: [userId], references: [id])
+  character  Character?     @relation(fields: [characterId], references: [id])
+  likes      MomentLike[]
+  comments   MomentComment[]
+
+  @@index([userId, createdAt])
+}
+
+model MomentLike {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String?
+  characterId String?
+  actorName String   @db.VarChar(80)
+  createdAt DateTime @default(now())
+
+  post      MomentPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User?       @relation(fields: [userId], references: [id])
+
+  @@index([postId])
+  @@unique([postId, userId, characterId])
+}
+
+model MomentComment {
+  id          String   @id @default(uuid())
+  postId      String
+  userId      String?
+  characterId   String?
+  actorName   String   @db.VarChar(80)
+  content     String   @db.VarChar(1000)
+  createdAt   DateTime @default(now())
+
+  post      MomentPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User?       @relation(fields: [userId], references: [id])
+
+  @@index([postId, createdAt])
 }
 
 model AnalyticsEvent {

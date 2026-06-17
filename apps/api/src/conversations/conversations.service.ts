@@ -3,6 +3,7 @@ import type {
   ConversationProfileView,
   ConversationView,
   MemoryView,
+  MessageType,
   MessageView,
   ModelProvider,
   RelationshipProgressView,
@@ -131,9 +132,18 @@ export class ConversationsService {
   async sendMessage(
     userId: string,
     conversationId: string,
-    input: SendMessageDto,
+    input: Omit<SendMessageDto, "type"> & { type?: string },
   ): Promise<SendMessageResponse> {
-    this.agentPolicy.assertInputAllowed({ content: input.content, app: "wechat" });
+    const messageType = input.type || "text";
+    const agentReadableContent = this.buildAgentReadableContent({
+      type: messageType,
+      content: input.content,
+      payload: input.payload,
+    });
+
+    if (agentReadableContent) {
+      this.agentPolicy.assertInputAllowed({ content: agentReadableContent, app: "wechat" });
+    }
 
     const conversation = await this.getOwnedConversation(userId, conversationId);
     const defaultModel = await this.getDefaultModel(userId);
@@ -147,7 +157,7 @@ export class ConversationsService {
     ]);
 
     const relationshipBefore = this.getRelationshipProgress(conversation.character.structuredProfile);
-    const nextRelationship = this.advanceRelationship(relationshipBefore, input.content);
+    const nextRelationship = this.advanceRelationship(relationshipBefore, agentReadableContent);
 
     const userMessage = await this.prisma.message.create({
       data: {
@@ -155,11 +165,9 @@ export class ConversationsService {
         conversationId,
         characterId: conversation.characterId,
         sender: "user",
-        type: "text",
-        content: input.content,
-        payload: {
-          source: "user_input",
-        },
+        type: messageType as MessageType,
+        content: input.content || null,
+        payload: input.payload ? JSON.parse(JSON.stringify(input.payload)) : { source: "user_input" },
       },
     });
 
@@ -167,7 +175,7 @@ export class ConversationsService {
       where: { id: conversationId },
       data: {
         unreadCount: 0,
-        lastMessagePreview: input.content,
+        lastMessagePreview: agentReadableContent || this.getPreviewForMessageType(messageType),
         lastMessageAt: userMessage.createdAt,
       },
     });
@@ -177,7 +185,7 @@ export class ConversationsService {
       characterId: conversation.characterId,
       conversationId,
       userMessageId: userMessage.id,
-      content: input.content,
+      content: agentReadableContent,
       occurredAt: userMessage.createdAt,
     });
 
@@ -186,7 +194,7 @@ export class ConversationsService {
       characterId: conversation.characterId,
       sourceEventId: agentRun?.eventId ?? null,
       sourceMessageId: userMessage.id,
-      content: input.content,
+      content: agentReadableContent,
     });
 
     await this.updateRelationshipProfile(conversation.characterId, conversation.character.structuredProfile, nextRelationship);
@@ -206,7 +214,7 @@ export class ConversationsService {
         model: defaultModel,
         character: conversation.character,
         recentMessages: freshRecentMessages,
-        currentUserMessage: input.content,
+        currentUserMessage: agentReadableContent,
         memories: this.uniqueMemories(memories.concat(newMemories)),
         relationship: nextRelationship,
       });
@@ -414,6 +422,76 @@ export class ConversationsService {
       modelName: config.modelName,
       apiKey: this.apiKeyCrypto.decrypt(config),
     };
+  }
+
+  private getPreviewForMessageType(type: string): string {
+    switch (type) {
+      case "image":
+        return "[图片]";
+      case "voice":
+        return "[语音]";
+      case "red_packet":
+        return "[红包]";
+      case "transfer":
+        return "[转账]";
+      case "location":
+        return "[位置]";
+      case "video":
+        return "[视频]";
+      case "sticker":
+        return "[表情]";
+      default:
+        return "[消息]";
+    }
+  }
+
+  private buildAgentReadableContent(input: {
+    type: string;
+    content?: string;
+    payload?: Record<string, unknown>;
+  }): string {
+    const content = input.content?.trim() ?? "";
+    const payload = input.payload ?? {};
+
+    switch (input.type) {
+      case "location": {
+        const location = this.readPayloadString(payload, "location") ?? this.readPayloadString(payload, "name");
+        const address = this.readPayloadString(payload, "address");
+
+        if (location && address) {
+          return `用户发送了当前位置：${location}，详细地址/说明：${address}`;
+        }
+
+        if (location) {
+          return `用户发送了当前位置：${location}`;
+        }
+
+        return content || "用户发送了一个位置";
+      }
+      case "voice": {
+        const transcript = this.readPayloadString(payload, "transcript");
+        return transcript ? `用户发送了一条语音，转文字内容：${transcript}` : content || "用户发送了一条语音";
+      }
+      case "image": {
+        const caption = this.readPayloadString(payload, "caption");
+        return caption ? `用户发送了一张图片，说明：${caption}` : content || "用户发送了一张图片";
+      }
+      case "official_account_article": {
+        const title = this.readPayloadString(payload, "title");
+        return title ? `用户转发了一篇公众号文章：${title}` : content || "用户转发了一篇公众号文章";
+      }
+      case "moment_share": {
+        const title = this.readPayloadString(payload, "title");
+        return title ? `用户分享了一条朋友圈：${title}` : content || "用户分享了一条朋友圈";
+      }
+      default:
+        return content;
+    }
+  }
+
+  private readPayloadString(payload: Record<string, unknown>, key: string): string | null {
+    const value = payload[key];
+    return typeof value === "string" && value.trim() ? value.trim() : null;
   }
 
   private advanceRelationship(

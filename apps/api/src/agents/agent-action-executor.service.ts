@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { AgentAction, AgentApp, AgentTaskType, ModelProvider, RelationshipProgressView, RelationshipStage } from "@myphone/shared";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../infra/prisma.service.js";
@@ -44,6 +44,9 @@ type AgentActionExecutionResult =
   | { type: "memory.merge"; memoryId: string; merged: boolean }
   | { type: "relationship.update"; relationship: RelationshipProgressView }
   | { type: "tool.call"; toolName: string; output: McpToolResult }
+  | { type: "wechat.moments.like"; postId: string; liked: boolean }
+  | { type: "wechat.moments.comment"; postId: string; commentId: string }
+  | { type: "wechat.moments.create_post"; postId: string }
   | { type: "none"; reason: string };
 
 @Injectable()
@@ -115,6 +118,7 @@ export class AgentActionExecutorService {
   private async executeAllowedAction(input: {
     userId: string;
     characterId: string;
+    taskType: AgentTaskType;
     action: AgentAction;
     metadata?: {
       provider?: ModelProvider;
@@ -129,6 +133,10 @@ export class AgentActionExecutorService {
   }): Promise<AgentActionExecutionResult> {
     switch (input.action.type) {
       case "wechat.send_message":
+        if (input.taskType !== "chat.reply" && !(await this.isCharacterActive(input.userId, input.characterId))) {
+          return { type: "none", reason: "Character is disabled" };
+        }
+
         return this.executeWechatSendMessage({
           userId: input.userId,
           characterId: input.characterId,
@@ -162,6 +170,24 @@ export class AgentActionExecutorService {
             reason: input.action.reason,
           }),
         };
+      case "wechat.moments.like":
+        return this.executeWechatMomentsLike({
+          userId: input.userId,
+          characterId: input.characterId,
+          action: input.action,
+        });
+      case "wechat.moments.comment":
+        return this.executeWechatMomentsComment({
+          userId: input.userId,
+          characterId: input.characterId,
+          action: input.action,
+        });
+      case "wechat.moments.create_post":
+        return this.executeWechatMomentsCreatePost({
+          userId: input.userId,
+          characterId: input.characterId,
+          action: input.action,
+        });
       case "tool.call": {
         const tool = this.toolRegistry.get(input.action.toolName);
         if (tool.provider !== "mcp") {
@@ -178,6 +204,15 @@ export class AgentActionExecutorService {
       case "none":
         return { type: "none", reason: input.action.reason };
     }
+  }
+
+  private async isCharacterActive(userId: string, characterId: string): Promise<boolean> {
+    const character = await this.prisma.character.findFirst({
+      where: { id: characterId, userId, deletedAt: null },
+      select: { isActive: true },
+    });
+
+    return Boolean(character?.isActive);
   }
 
   private async executeWechatSendMessage(input: {
@@ -290,6 +325,145 @@ export class AgentActionExecutorService {
     };
   }
 
+  private async validateMomentInteraction(input: {
+    userId: string;
+    characterId: string;
+    postId: string;
+  }): Promise<{ name: string; isActive: boolean }> {
+    const [character, post] = await Promise.all([
+      this.prisma.character.findFirst({
+        where: { id: input.characterId, userId: input.userId, deletedAt: null },
+        select: { name: true, isActive: true },
+      }),
+      this.prisma.momentPost.findUnique({
+        where: { id: input.postId },
+        select: { id: true, userId: true },
+      }),
+    ]);
+
+    if (!character) {
+      throw new ForbiddenException("Character not found or not owned by user");
+    }
+
+    if (!post || post.userId !== input.userId) {
+      throw new ForbiddenException("Cannot interact with this moment");
+    }
+
+    return character;
+  }
+
+  private async executeWechatMomentsLike(input: {
+    userId: string;
+    characterId: string;
+    action: Extract<import("@myphone/shared").AgentAction, { type: "wechat.moments.like" }>;
+  }): Promise<{ type: "wechat.moments.like"; postId: string; liked: boolean } | { type: "none"; reason: string }> {
+    const character = await this.validateMomentInteraction({
+      userId: input.userId,
+      characterId: input.characterId,
+      postId: input.action.postId,
+    });
+    if (!character.isActive) {
+      return { type: "none", reason: "Character is disabled" };
+    }
+
+    const existingLike = await this.prisma.momentLike.findFirst({
+      where: {
+        postId: input.action.postId,
+        userId: input.userId,
+        characterId: input.characterId,
+      },
+    });
+
+    if (existingLike) {
+      await this.prisma.momentLike.delete({ where: { id: existingLike.id } });
+      return { type: "wechat.moments.like", postId: input.action.postId, liked: false };
+    }
+
+    await this.prisma.momentLike.create({
+      data: {
+        postId: input.action.postId,
+        userId: input.userId,
+        characterId: input.characterId,
+        actorName: character.name,
+      },
+    });
+
+    return { type: "wechat.moments.like", postId: input.action.postId, liked: true };
+  }
+
+  private async executeWechatMomentsComment(input: {
+    userId: string;
+    characterId: string;
+    action: Extract<import("@myphone/shared").AgentAction, { type: "wechat.moments.comment" }>;
+  }): Promise<{ type: "wechat.moments.comment"; postId: string; commentId: string } | { type: "none"; reason: string }> {
+    const character = await this.validateMomentInteraction({
+      userId: input.userId,
+      characterId: input.characterId,
+      postId: input.action.postId,
+    });
+    if (!character.isActive) {
+      return { type: "none", reason: "Character is disabled" };
+    }
+
+    const safeContent = this.agentPolicy.sanitizeOutput({
+      content: input.action.content,
+      app: "wechat",
+    });
+
+    const comment = await this.prisma.momentComment.create({
+      data: {
+        postId: input.action.postId,
+        characterId: input.characterId,
+        actorName: character.name,
+        content: safeContent,
+      },
+    });
+
+    return { type: "wechat.moments.comment", postId: input.action.postId, commentId: comment.id };
+  }
+
+  private async executeWechatMomentsCreatePost(input: {
+    userId: string;
+    characterId: string;
+    action: Extract<import("@myphone/shared").AgentAction, { type: "wechat.moments.create_post" }>;
+  }): Promise<{ type: "wechat.moments.create_post"; postId: string } | { type: "none"; reason: string }> {
+    const character = await this.prisma.character.findFirst({
+      where: { id: input.characterId, userId: input.userId, deletedAt: null },
+      select: { name: true, structuredProfile: true, isActive: true },
+    });
+
+    if (!character) {
+      throw new NotFoundException("Character not found");
+    }
+
+    if (!character.isActive) {
+      return { type: "none", reason: "Character is disabled" };
+    }
+
+    const safeContent = this.agentPolicy.sanitizeOutput({
+      content: input.action.content,
+      app: "wechat",
+    });
+    const profile = this.normalizeProfile(character.structuredProfile);
+    const avatarUrl = typeof profile.avatarUrl === "string" && profile.avatarUrl.trim() ? profile.avatarUrl : null;
+
+    const post = await this.prisma.momentPost.create({
+      data: {
+        userId: input.userId,
+        characterId: input.characterId,
+        authorType: "character",
+        authorName: character.name,
+        authorAvatar: avatarUrl,
+        content: safeContent,
+        imageUrls: input.action.imageUrls ?? [],
+        location: input.action.location || null,
+        visibility: input.action.visibility ?? "public",
+      },
+    });
+
+    return { type: "wechat.moments.create_post", postId: post.id };
+  }
+
   private async updateRelationship(input: {
     userId: string;
     characterId: string;
@@ -386,6 +560,12 @@ export class AgentActionExecutorService {
     switch (action.type) {
       case "wechat.send_message":
         return "sendWechatMessage";
+      case "wechat.moments.like":
+        return "wechatMomentsLike";
+      case "wechat.moments.comment":
+        return "wechatMomentsComment";
+      case "wechat.moments.create_post":
+        return "wechatMomentsCreatePost";
       case "memory.write":
         return "writeMemory";
       case "memory.merge":
@@ -482,6 +662,29 @@ export class AgentActionExecutorService {
         conversationId: value.conversationId,
         content: value.content,
         metadata: this.normalizeJsonObject(value.metadata),
+      };
+    }
+
+    if ("liked" in value && value.type === "wechat.moments.like") {
+      return {
+        type: value.type,
+        postId: value.postId,
+        liked: value.liked,
+      };
+    }
+
+    if ("commentId" in value && value.type === "wechat.moments.comment") {
+      return {
+        type: value.type,
+        postId: value.postId,
+        commentId: value.commentId,
+      };
+    }
+
+    if ("postId" in value && value.type === "wechat.moments.create_post") {
+      return {
+        type: value.type,
+        postId: value.postId,
       };
     }
 

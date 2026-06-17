@@ -63,6 +63,17 @@ export function updateCharacter(
   });
 }
 
+export function updateCharacterStatus(
+  accessToken: string,
+  characterId: string,
+  isActive: boolean,
+): Promise<CharacterView> {
+  return request<CharacterView>(`/characters/${characterId}/status`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ isActive }),
+  });
+}
+
 export function parseCharacterCard(
   accessToken: string,
   input: CharacterCardImportRequest,

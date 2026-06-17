@@ -9,7 +9,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   const port = Number(process.env.PORT ?? 3000);
-  const corsOrigin = process.env.CORS_ORIGIN ?? "http://localhost:5173";
+  const corsOrigin = parseCorsOrigin(process.env.CORS_ORIGIN);
 
   app.use(json({ limit: "5mb" }));
   app.use(urlencoded({ extended: true, limit: "5mb" }));
@@ -25,6 +25,20 @@ async function bootstrap() {
 }
 
 void bootstrap();
+
+function parseCorsOrigin(value?: string): string | string[] {
+  const configuredOrigins = value
+    ? value
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : [];
+  const localOrigins =
+    process.env.NODE_ENV === "production" ? [] : ["http://localhost:5173", "http://localhost:15173"];
+  const origins = Array.from(new Set([...configuredOrigins, ...localOrigins]));
+
+  return origins.length > 1 ? origins : origins[0] ?? "http://localhost:5173";
+}
 
 function assertRuntimeSafety(): void {
   if (process.env.NODE_ENV === "production" && process.env.LLM_MOCK_ENABLED === "true") {

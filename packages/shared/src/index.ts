@@ -21,11 +21,14 @@ export type ModelProvider = "deepseek" | "glm" | "kimi";
 export type MessageType =
   | "text"
   | "voice"
+  | "image"
   | "sticker"
   | "quote"
   | "red_packet"
   | "transfer"
   | "location"
+  | "official_account_article"
+  | "moment_share"
   | "video"
   | "system_hint";
 
@@ -113,6 +116,7 @@ export type CreateCharacterRequest = {
   adultEnabled?: boolean;
   adultIntensity?: AdultIntensity;
   proactiveFrequency?: ProactiveFrequency;
+  isActive?: boolean;
   rawCharacterCard: string;
   safetyAccepted?: boolean;
 };
@@ -132,6 +136,7 @@ export type CharacterView = {
   adultEnabled: boolean;
   adultIntensity: string;
   proactiveFrequency: string;
+  isActive: boolean;
   riskLevel: string;
   rawCharacterCard: string | null;
   structuredProfile: Record<string, unknown>;
@@ -202,7 +207,9 @@ export type AgeConfirmResponse = {
 };
 
 export type SendMessageRequest = {
-  content: string;
+  content?: string;
+  type?: MessageType;
+  payload?: Record<string, unknown>;
 };
 
 export type SendMessageResponse = {
@@ -320,6 +327,26 @@ export type AgentAction =
       type: "wechat.send_message";
       conversationId: string;
       content: string;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      type: "wechat.moments.like";
+      postId: string;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      type: "wechat.moments.comment";
+      postId: string;
+      content: string;
+      replyToCommentId?: string;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      type: "wechat.moments.create_post";
+      content: string;
+      imageUrls?: string[];
+      location?: string;
+      visibility?: "public" | "private";
       metadata?: Record<string, unknown>;
     }
   | {
@@ -449,4 +476,72 @@ export type AgentStateView = {
   state: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+};
+
+export type WechatProfileView = {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  wechatId: string | null;
+  bio: string | null;
+  region: string | null;
+  walletBalanceCents: number;
+  defaultMomentVisibility: "public" | "private" | "partial";
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PatchWechatProfileRequest = {
+  displayName?: string;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  region?: string | null;
+  wechatId?: string | null;
+  defaultMomentVisibility?: "public" | "private" | "partial";
+};
+
+export type MomentLikeView = {
+  id: string;
+  actorName: string;
+  createdAt: string;
+};
+
+export type MomentCommentView = {
+  id: string;
+  userId: string | null;
+  characterId: string | null;
+  actorName: string;
+  content: string;
+  createdAt: string;
+};
+
+export type MomentVisibility = "public" | "private" | "friends";
+
+export type MomentView = {
+  id: string;
+  userId: string;
+  characterId: string | null;
+  authorType: "user" | "character";
+  authorName: string;
+  authorAvatar: string | null;
+  content: string;
+  imageUrls: string[];
+  location: string | null;
+  visibility: MomentVisibility;
+  likes: MomentLikeView[];
+  comments: MomentCommentView[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateMomentRequest = {
+  content: string;
+  imageUrls?: string[];
+  location?: string | null;
+  visibility?: MomentVisibility;
+};
+
+export type CreateMomentCommentRequest = {
+  content: string;
 };
