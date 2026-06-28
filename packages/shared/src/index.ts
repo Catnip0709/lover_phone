@@ -290,6 +290,52 @@ export type ConversationProfileView = {
   memories: MemoryView[];
 };
 
+export type GameMemoryMode = "readOnly" | "ephemeral" | "off";
+
+export type GameCompanionAction =
+  | "idle"
+  | "observe"
+  | "cheer"
+  | "celebrate"
+  | "hint"
+  | "think"
+  | "comfort"
+  | "tease"
+  | "focus";
+
+export type GameCompanionMood =
+  | "calm"
+  | "happy"
+  | "excited"
+  | "focused"
+  | "soft"
+  | "playful"
+  | "concerned";
+
+export type GameCompanionRequest = {
+  gameId: string;
+  gameTitle: string;
+  characterId: string;
+  memoryMode?: GameMemoryMode;
+  userIntent?: string;
+  gameState?: {
+    phase?: string;
+    event?: string;
+    score?: number;
+    summary?: string;
+    payload?: Record<string, unknown>;
+  };
+};
+
+export type GameCompanionResponse = {
+  action: GameCompanionAction;
+  mood: GameCompanionMood;
+  text: string;
+  memoryMode: GameMemoryMode;
+  usedMemoryCount: number;
+  generatedAt: string;
+};
+
 export type AgentApp = "wechat" | "contacts" | "system" | (string & {});
 
 export type AgentVisibility = "private" | "public" | "system";

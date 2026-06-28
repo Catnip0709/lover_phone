@@ -7,6 +7,8 @@ import CharacterDetail from "@/pages/characters/CharacterDetail";
 import CharacterList from "@/pages/characters/CharacterList";
 import ImportCharacter from "@/pages/characters/ImportCharacter";
 import NewCharacter from "@/pages/characters/NewCharacter";
+import GameHost from "@/pages/games/GameHost";
+import GamesHome from "@/pages/games/GamesHome";
 import LegalPage from "@/pages/legal/LegalPage";
 import MeProfileEdit from "@/pages/me/MeProfileEdit";
 import MemoriesPage from "@/pages/memories/MemoriesPage";
@@ -62,6 +64,14 @@ export default function App() {
           element={user ? <ImportCharacter /> : <Navigate to="/login" replace />}
         />
         <Route path="/messages" element={user ? <WechatShell /> : <Navigate to="/login" replace />} />
+        <Route
+          path="/games"
+          element={user ? <GamesHome /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/games/:gameId"
+          element={user ? <GameHost /> : <Navigate to="/login" replace />}
+        />
         <Route
           path="/memories"
           element={user ? <MemoriesPage /> : <Navigate to="/login" replace />}

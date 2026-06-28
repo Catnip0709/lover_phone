@@ -60,6 +60,27 @@ export class AgentMemoryService {
     });
   }
 
+  async retrieveForGamePlay(input: { userId: string; characterId: string; limit?: number }): Promise<MemoryView[]> {
+    const limit = input.limit ?? 8;
+    const memories = await this.prisma.agentMemory.findMany({
+      where: {
+        userId: input.userId,
+        characterId: input.characterId,
+        enabled: true,
+        visibility: { in: ["private", "public"] },
+      },
+      orderBy: [{ weight: "desc" }, { confidence: "desc" }, { updatedAt: "desc" }],
+      take: limit,
+    });
+
+    return this.withLegacyFallback({
+      userId: input.userId,
+      characterId: input.characterId,
+      limit,
+      memories: memories.map(this.toCompatibleMemoryView),
+    });
+  }
+
   async retrieveForPublicContext(input: { userId: string; characterId: string; limit?: number }): Promise<MemoryView[]> {
     const limit = input.limit ?? 6;
     const memories = await this.prisma.agentMemory.findMany({

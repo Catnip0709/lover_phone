@@ -11,6 +11,8 @@ import { CharactersController } from "./characters/characters.controller.js";
 import { CharactersService } from "./characters/characters.service.js";
 import { ConversationsController } from "./conversations/conversations.controller.js";
 import { ConversationsService } from "./conversations/conversations.service.js";
+import { GamesController } from "./games/games.controller.js";
+import { GamesService } from "./games/games.service.js";
 import { HealthController } from "./health/health.controller.js";
 import { HealthService } from "./health/health.service.js";
 import { ModelConfigsController } from "./model-configs/model-configs.controller.js";
@@ -30,6 +32,7 @@ import { WechatModule } from "./wechat/wechat.module.js";
     AuthController,
     CharactersController,
     ConversationsController,
+    GamesController,
     HealthController,
     ModelConfigsController,
     UploadsController,
@@ -39,6 +42,7 @@ import { WechatModule } from "./wechat/wechat.module.js";
     AuthService,
     CharactersService,
     ConversationsService,
+    GamesService,
     HealthService,
     JwtAuthGuard,
     JwtService,

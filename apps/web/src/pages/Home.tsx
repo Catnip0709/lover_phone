@@ -4,6 +4,7 @@ import {
   Cloud,
   CloudRain,
   CloudSnow,
+  Gamepad2,
   Image,
   MessageCircle,
   Moon,
@@ -91,6 +92,12 @@ export default function Home() {
                   className="bg-[#a98467]"
                   icon={<BookText className="h-7 w-7 text-white" />}
                   onClick={() => navigate("/memories")}
+                />
+                <PhoneAppIcon
+                  label="游戏"
+                  className="bg-[#0f172a]"
+                  icon={<Gamepad2 className="h-7 w-7 text-white" />}
+                  onClick={() => navigate("/games")}
                 />
                 <PhoneAppIcon
                   label="相册"
