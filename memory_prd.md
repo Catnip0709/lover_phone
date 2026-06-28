@@ -644,12 +644,36 @@
 | `GET` | `/api/memories/:id` | 获取单条记忆 |
 | `POST` | `/api/memories` | 创建记忆 |
 | `PATCH` | `/api/memories/:id` | 更新记忆 |
-| `DELETE` | `/api/memories/:id` | 删除记忆 |
+| `DELETE` | `/api/memories/:id` | 删除记忆（软删除） |
 | `GET` | `/api/memories/stats` | 获取统计 |
 | `POST` | `/api/memories/export` | 导出记忆 |
 | `POST` | `/api/memories/import` | 导入记忆 |
 
-### 6.2 请求/响应格式
+### 6.2 通用规范
+
+#### 鉴权
+- 所有接口需携带用户鉴权 Token（通过 `Authorization: Bearer <token>` header）
+- 接口自动根据 Token 解析 `userId`，用户只能操作自己的记忆
+
+#### 分页
+- `pageSize` 最大限制：100
+- 默认 `pageSize`：20
+
+#### 错误响应格式
+```json
+{
+  "error": {
+    "code": "MEMORY_NOT_FOUND" | "UNAUTHORIZED" | "VALIDATION_ERROR" | "INTERNAL_ERROR",
+    "message": "错误描述"
+  }
+}
+```
+
+#### 删除策略
+- **软删除**：将 `enabled` 设为 `false`，不物理删除数据
+- 删除后的记忆不在列表中展示，但可通过 ID 恢复
+
+### 6.3 请求/响应格式
 
 #### GET /api/memories
 
@@ -665,6 +689,11 @@
 | `isPinned` | boolean | 否 | 是否置顶 |
 | `page` | number | 否 | 页码，默认 1 |
 | `pageSize` | number | 否 | 每页条数，默认 20 |
+
+**排序规则**：
+- 默认排序：`isPinned DESC, weight DESC, updatedAt DESC`
+- 置顶记忆始终在最前面
+- 同优先级按权重降序，权重相同按更新时间降序
 
 **响应**：
 
@@ -748,6 +777,9 @@
 
 #### GET /api/memories/stats
 
+**说明**：
+- `topMemories[].useCount` = `structured.mergeCount`（合并次数），代表记忆被强化的次数
+
 **响应**：
 
 ```json
@@ -789,6 +821,51 @@
       "useCount": 23
     }
   ]
+}
+```
+
+#### POST /api/memories/export
+
+**说明**：导出用户所有记忆为 JSON 文件
+
+**响应**：
+```json
+{
+  "version": "1.0",
+  "exportedAt": "2024-01-15T14:30:00Z",
+  "memories": [
+    {
+      "type": "user_profile",
+      "content": "用户名字/称呼是「小明」",
+      "weight": 80,
+      "visibility": "private",
+      "isPinned": false,
+      "tags": ["生日", "人物"],
+      "expiresAt": null,
+      "createdBy": "ai",
+      "createdAt": "2024-01-15T14:30:00Z"
+    }
+  ]
+}
+```
+
+#### POST /api/memories/import
+
+**请求体**：同 export 格式的 JSON
+
+**冲突处理策略**：
+| 情况 | 处理方式 |
+|------|----------|
+| 内容完全相同 | 跳过（保留现有） |
+| 内容相同但权重不同 | 取权重较高的 |
+| 新记忆 | 插入 |
+
+**响应**：
+```json
+{
+  "imported": 5,
+  "skipped": 2,
+  "errors": []
 }
 ```
 
@@ -1055,13 +1132,15 @@
 
 | 阶段 | 交付内容 | 工期 |
 |------|----------|------|
-| **M1** | 基础数据层 + 列表查看 | Day 1 |
-| **M2** | 分类筛选 + 详情编辑 | Day 2 |
-| **M3** | 新增/置顶 + 统计页 | Day 3 |
-| **M4** | 设置/导入导出 + 优化 | Day 4 |
-| **M5** | 测试 + Bug 修复 | Day 5 |
+| **M1** | 基础数据层 + 列表查看 | Day 1~1.5 |
+| **M2** | 分类筛选 + 详情编辑 | Day 2~3 |
+| **M3** | 新增/置顶 + 统计页 | Day 4~4.5 |
+| **M4** | 设置/导入导出 + 优化 | Day 5~6.5 |
+| **M5** | 测试 + Bug 修复 | Day 7~8 |
 
-**总工期：5 个工作日**
+**总工期：7~10 个工作日**
+
+> ⚠️ 原 5 天工期评估过于乐观，实际需要 7-10 天
 
 ---
 

@@ -1,5 +1,6 @@
 import {
   BatteryMedium,
+  BookText,
   Cloud,
   CloudRain,
   CloudSnow,
@@ -84,6 +85,12 @@ export default function Home() {
                   className="bg-[#fb7185]"
                   icon={<Plus className="h-7 w-7 text-white" />}
                   onClick={() => navigate("/characters")}
+                />
+                <PhoneAppIcon
+                  label="记忆"
+                  className="bg-[#a98467]"
+                  icon={<BookText className="h-7 w-7 text-white" />}
+                  onClick={() => navigate("/memories")}
                 />
                 <PhoneAppIcon
                   label="相册"

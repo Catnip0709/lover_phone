@@ -7,7 +7,11 @@ export default {
     container: {
       center: true,
     },
-    extend: {},
+    extend: {
+      boxShadow: {
+        "memory-card": "0 4px 16px rgba(61,61,61,0.08)",
+      },
+    },
   },
   plugins: [],
 };

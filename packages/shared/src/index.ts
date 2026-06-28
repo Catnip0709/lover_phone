@@ -268,6 +268,11 @@ export type MemoryView = {
   sourceMessageId: string | null;
   createdAt: string;
   updatedAt: string;
+  // 新增字段
+  isPinned?: boolean;
+  tags?: string[];
+  expiresAt?: string | null;
+  createdBy?: string;
 };
 
 export type RelationshipProgressView = {
@@ -358,6 +363,11 @@ export type AgentMemoryView = {
   lastUsedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // 新增字段
+  isPinned: boolean;
+  tags: string[];
+  expiresAt: string | null;
+  createdBy: string;
 };
 
 export type AgentAction =

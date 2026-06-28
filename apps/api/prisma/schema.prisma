@@ -331,6 +331,11 @@ model AgentMemory {
   lastUsedAt    DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  // 新增字段
+  isPinned      Boolean   @default(false)
+  tags          String[]
+  expiresAt     DateTime?
+  createdBy     String    @default("ai") @db.VarChar(20)
 
   user      User      @relation(fields: [userId], references: [id])
   character Character @relation(fields: [characterId], references: [id])
@@ -338,6 +343,9 @@ model AgentMemory {
   @@index([characterId, enabled, weight])
   @@index([userId, characterId, type])
   @@index([sourceEventId])
+  @@index([characterId, type])
+  @@index([sourceApp])
+  @@index([isPinned, updatedAt])
 }
 
 model WechatProfile {

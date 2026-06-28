@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   Bell,
+  BookText,
   ChevronRight,
   Info,
   Palette,
@@ -27,6 +28,13 @@ const SETTING_ITEMS: SettingItem[] = [
     description: "配置 DeepSeek / GLM / Kimi 等模型的 API Key 与默认模型。",
     icon: <PlugZap className="h-5 w-5" />,
     to: "/settings/model",
+  },
+  {
+    key: "memories",
+    label: "记忆日记本",
+    description: "管理与每个角色的长期记忆，可置顶、编辑或删除。",
+    icon: <BookText className="h-5 w-5" />,
+    to: "/memories",
   },
   {
     key: "general",

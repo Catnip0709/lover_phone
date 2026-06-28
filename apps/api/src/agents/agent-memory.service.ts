@@ -211,6 +211,10 @@ export class AgentMemoryService {
     lastUsedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
+    isPinned: boolean;
+    tags: string[];
+    expiresAt: Date | null;
+    createdBy: string;
   }): AgentMemoryView {
     return {
       id: memory.id,
@@ -230,6 +234,10 @@ export class AgentMemoryService {
       lastUsedAt: memory.lastUsedAt?.toISOString() ?? null,
       createdAt: memory.createdAt.toISOString(),
       updatedAt: memory.updatedAt.toISOString(),
+      isPinned: memory.isPinned,
+      tags: memory.tags,
+      expiresAt: memory.expiresAt?.toISOString() ?? null,
+      createdBy: memory.createdBy,
     };
   }
 

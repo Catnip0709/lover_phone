@@ -9,6 +9,8 @@ import ImportCharacter from "@/pages/characters/ImportCharacter";
 import NewCharacter from "@/pages/characters/NewCharacter";
 import LegalPage from "@/pages/legal/LegalPage";
 import MeProfileEdit from "@/pages/me/MeProfileEdit";
+import MemoriesPage from "@/pages/memories/MemoriesPage";
+import MemoryNew from "@/pages/memories/MemoryNew";
 import ConversationDetail from "@/pages/messages/ConversationDetail";
 import WechatProfileEdit from "@/pages/wechat/WechatProfileEdit";
 import WechatShell from "@/pages/wechat/WechatShell";
@@ -60,6 +62,14 @@ export default function App() {
           element={user ? <ImportCharacter /> : <Navigate to="/login" replace />}
         />
         <Route path="/messages" element={user ? <WechatShell /> : <Navigate to="/login" replace />} />
+        <Route
+          path="/memories"
+          element={user ? <MemoriesPage /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/memories/new"
+          element={user ? <MemoryNew /> : <Navigate to="/login" replace />}
+        />
         <Route
           path="/me/profile"
           element={user ? <MeProfileEdit /> : <Navigate to="/login" replace />}
